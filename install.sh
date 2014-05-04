@@ -7,7 +7,6 @@ VER=0.4
  cd src/slackware-live-$VER
   patch -p1 < ../patches.patch 
 )
-echo "pwd="$PWD
 
 install -d -m 755 $DESTDIR/usr/doc/slackware-live-$VER
 install -d -m 755 $DESTDIR/install
