@@ -1,0 +1,132 @@
+2014-05-04: Dimitris Tzemos (djemos@slackel.gr) corrections for slackel, salix.
+    + add support for setting root password at installation on hard disk
+	+ add support for creation a new user and password and remove the liveuser
+	+ add support for setting the keyboard correctly at boot time for greek land other locales.
+    + remove automatic mounting devices on /mnt at boot time. This is done by spacefm so greek locale ntfs partitions mounted the write way.
+
+2014-01-24: Slackware-Live-0.4: add support for UEFI & GPT
+	+ add tz (timezone) & hwc (hardwareclock) boot options
+	+ support persistent home and changes on partition (fixed disk or usb)
+	+ cmake is no more needed to build project
+	+ removed display of what is done during install or copy (build script is too long); use 'bash -x' or 'set -o xtrace' to enable debug instead
+	+ removed support for "/boot/lilomenubitmap.cfg" file for custom LiLo boot menu (not really needed)
+2013-11-15: Slackware-Live-0.3.11: removed tmpfs entry in fstab
+	+ updated for slackware-14.1:
+		- sleep 3 seconds after module loading
+		- mandatory modules list updated: +ehci-pci, xhci-hcd & usb-storage
+2013-07-05: Slackware-Live-0.3.10: many NFS boot related bugfixes
+2013-02-05: Slackware-Live-0.3.9: removed autologin program (use "agetty -a" instead)
+	+ for network driver autodetection when using "--share " (root over NFS), initrd is no more updated with loaded network drivers by default; "auto" parameter is now required for this behavior
+	+ fastboot improvement (disabled udev start in rc.M)
+2012-08-25: Slackware-Live-0.3.8: patched / simplified (SysLinux related); ready to support Slackware 14.
+2012-06-25: Slackware-Live-0.3.7: added support for Slackware 64 - too simple, I should have done this a long time ago, sorry.
+2012-01-16: Slackware-Live-0.3.6: CD/DVD ejection bugfix (sleep 5 seconds before poweroff or reboot)
+	+ add support for persistent system changes on USB devices or over NFS
+	+ add new boot parameter ("fastboot=yes") to skip some actions done by gui_prep (fc-cache, update-mime-database, gtk-update-icon-cache, update-gtk-immodules, update-gtk-immodules and update-pango-querymodules)
+	+ persistent homedir can now be over NFS
+	+ renamed "--guiprep" option to "--sysprep": in addition of her previous behavior, this option now runs depmod and ldconfig, merges /etc/passwd and /etc/group from multiples branches and setups root and users profile (from /etc/skel)
+2011-09-08: Slackware-Live-0.3.5: Slackware 13.0 no longer supported without symlink: /usr/share/syslinux -> /usr/lib/syslinux
+	+ now cleanly umounts USB boot device before shutdown
+	+ improved and tested/fixed "--share"
+2011-05-19: Slackware-Live-0.3.4: Slackware-Live Installer (GUI) is now a separate project and Xdialog is no more needed
+	+ don't handle Firefox cache anymore
+	+ added SLSync tool (separate project)
+2011-04-27: Slackware-Live-0.3.3: support Slackware-13.37
+	+ removed LiNomad startup script
+	+ using runlevel 5, user with UID=1000 (or root if he doesn't exists) is automaticaly logged in
+	+ change "home" boot parameter to set persistant homedir location (a file or directory on the USB boot device)
+	+ removed GUI auto-detection feature
+	+ ensure device file exists before copying live system on USB key
+2010-11-22: Slackware-Live-0.3.2: reorganized source and installation tree
+	+ add full support for live USB on FAT32
+	+ Slackware-Live is no more needed on live system (like in 0.2 versions)
+	+ LiNomad startup script is now disabled by default (removed "linomad=yes" boot parameter)
+	+ LiNomad startup script doesn't create "linomad" user anymore; live user (autologin) is now the one with UID=1000 or root
+	+ detected swap partitions are now listed in "/etc/fstab" after installation
+	+ other minor fixes
+2010-11-20: Slackware-Live-0.3.1: code refactoring
+	+ live media detection improvement (now tries only Linux partitions)
+	+ added "max_loop=255" kernel parameter to allow more than 8 modules
+	+ fixed partitions detection bug fix: now creates the mount point at the right place
+	+ improved kernel version detection (now uses "/boot/vmlinuz" link target)
+	+ customization change: 
+		- no more "SLTITLE" and "SLMODLIST" environment variables
+		- removed "-linomad" and "-nosli" options (replaced  by boot parameters)
+		+ added "modules_list" parameter for "--init" and "--share"
+		+ SysLinux is now configured by "--init", allowing easy editing or replacement of configuration files
+	+ LiNomad startup script now creates "linomad" user if he doesn't exist (needed for autologin)
+	+ enabling ISO build from a live USB system
+	+ enabling live system install on a fixed disk; enabling system install on an USB disk
+	+ now wipes entirely old installation and set filesystem label when installing on an USB disk
+	+ now adds net modules into InitRD instead of creating a new one for "--share"
+	+ now activates USB live install partition
+	+ "/boot/slackware-live" renamed "/boot/liveboot"
+2010-11-13: Slackware-Live-0.3.0: enabling root over NFS live startup
+	+ available fixed partition are now detected by init script, and listed in "/etc/fstab" (unmounted)
+	+ current "/etc/fstab" is copied during installation
+	+ add "useswap" boot parameter
+	+ add "rootpw" boot parameter
+	+ format USB device as ext3 instead of ext2
+	+ add gettext support for install (BASH) script
+	+ add support for "/boot/lilomenubitmap.cfg" file for custom LiLo boot menu
+	+ add support for for custom SysLinux config files
+	- removed french documentation
+2010-10-05: Slackware-Live-0.2.14: "loadersetup" bugfix (now copy device files)
+	+ fix "gui_prep": AUFS hidden files are deleted; "gui_prep" must now be run explicitly
+2010-09-28: Slackware-Live-0.2.13: bugfix for LiNomad: user firefox extension directory was owned by root
+	+ bugfix "add": support relative path for package list
+2010-09-08: Slackware-Live-0.2.12: bugfix for USB install: wait after partitioning
+2010-08-17: Slackware-Live-0.2.11:
+	+ bugfix in install script (for InitRD creation)
+	+ installation improvements:
+		- now ask if the user wants automatic or expert LiLo setup
+		- use available InitRD
+	+ support ktsuss or gksu inside "*.desktop" files
+	+ online help improvement: only relevant the messages are now displayed
+2010-08-01: Slackware-Live-0.2.10: 
+	+ better USB home directory handling for LiNomad
+	+ better documentation
+	+ live system is now aware of mounts (squashfs, unionfs...)
+	+ installation program improvements:
+		- LiLo: use lilo.bmp only if available
+		- creates an initrd if needed
+2010-07-27: Slackware-Live-0.2.9: installation program bugfixes:
+	- LiLo: Windows partition detection (now searching for active ** NTFS ** partition)
+	- LiLo: copy all "sd*" block devices from live system to installed system
+	- remove boot media from available installation places	
+2010-07-20: Slackware-Live-0.2.8: fixed '-add' option postinstall
+	+ fixed boot menu title
+	+ fixed non working (for installation) AUFS mounting (thanks to Christopher Rogers for reporting)
+	+ fixed non working live system installation GUI menu entry for Linomad
+2010-07-17: Slackware-Live-0.2.7: copy2ram: copy only used modules (cf exclude and include boot parameters)
+	+ try to fix USB-CD/DVD booting
+	+ '--add' option bugfix
+2010-07-15: Slackware-Live-0.2.6: more fixes for keymap
+	+ add option to prevent the use of the Slackware-Live installer
+2010-07-13: Slackware-Live-0.2.5: fixed keymap problem
+	+ add '--guiprep' option to prepare the system GUI (fonts, icons) when system is splitted into multiple directories
+2010-07-06: Slackware-Live-0.2.4: use 'gui' and 'usbhome' boot parameters only fo LiNomad startup
+2010-07-05: Slackware-Live-0.2.3: fixes (thanks again to Sebastian Reisse for all the testing and reports)
+	+ enable copyram feature for USB too
+2010-07-04: Slackware-Live-0.2.2: fixed LiNomad to use USB stored home directory
+	+ replaced 'init' boot parameter by 'runlevel'
+	+ add copy to ram feature, to enable live-CD/DVD ejection
+	+ enable support for AUFS (needs kernel recompile) with failback to UnionFS-FUSE
+	+ should be ready for SquashFS with LZMA compression
+2010-07-02: Slackware-Live-0.2.1: fixed documentaton
+	+ add support for non UTF-8 locale
+	+ add support for optional modules include list and exclude modules list (boot parameters)
+	+ add optional support for LiNomad startup (merged to Slackware-Live)
+2010-06-29: Slackware-Live-0.2: support for multiple SquashFS module added (warning: '--live' option removed; '--init' and '--module' options added)
+	+ rc.S and rc.6 have been removed to use standard startup and shutdown
+	+ warning: for '--iso' option, an ISO file name is now expected instead of the destination directory
+	+ added GUI for installation
+
+2010-06-29: Slackware-Live-0.1.6: bugfixes: usb installation (using extlinux instead of syslinux) + autodetects syslinux files location
+2010-06-28: Slackware-Live-0.1.5: bugfixes: font problem + wrong SquashFS module file name for copy ('--usb' option)
+2010-06-25: Slackware-Live-0.1.4: added possibility to use a single system + added better french doc
+2010-06-24: Slackware-Live-0.1.3: added support for non huge kernel
+2010-06-24: Slackware-Live-0.1.2: warning: changed options names for 'build-slackware-live.sh" script
+	+ added more complete (with examples and procedure) inline documentation to 'build-slackware-live.sh" script
+2010-06-21: Slackware-Live-0.1.1: fixed wrong path in 'create_initrd' when installation prefix is not '/usr'
+2010-06-18: Slackware-Live-0.1: forked from LiNomad to be simplier, more versatile, and use UnionFS-FUSE instead of AUFS

@@ -1,0 +1,413 @@
+#!/bin/ash
+
+echo ""
+echo "*** Live system initialization ***"
+mount -v proc /proc -t proc
+mount -v sysfs /sys -t sysfs
+
+/load_kernel_modules 2>/dev/null
+sleep 3
+mdev -s
+
+mkdir /tmp #fuse needs /tmp
+
+mkdir /slroot
+mount -o defaults -t tmpfs none /slroot #-o defaults: bug in busybox (options=0)
+mkdir /slroot/live
+
+mkdir /slroot/live/media
+mediadetected="none"
+if [ ! -z "$nfsroot" ]; then
+	mediadetected="nfs"
+	address=`echo $ip | cut -f1 -d:`
+	netmask=`echo $ip | cut -f4 -d:`
+	gateway=`echo $ip | cut -f3 -d:`
+	ifconfig eth0 $address netmask $netmask
+	route add default gw $gateway
+	mount -t nfs -o nolock $nfsroot /slroot/live/media
+	title=`cat /slroot/live/media/boot/syslinux/syslinux.cfg | grep "menu title " | cut -f3 -d' '`
+	echo "$title found on $nfsroot"
+fi
+sleeptime=0
+alreadycheckedpartitions=""
+while [ "$mediadetected" == "none" ] && [ "$sleeptime" != "10" ]; do #try each seconds, but don't wait (USB) more than 10 seconds
+	for partition in `cat /proc/partitions | sed -e 1d -e 2d | cut -c26-`; do
+		if mount -o ro /dev/$partition /slroot/live/media >/dev/null 2>/dev/nul; then
+			if [ -f /slroot/live/media/boot/liveboot ]; then
+				if [ "$partition" == "sr0" ] || [ "$partition" == "sr1" ]
+				then mediadetected="cd"
+				else mediadetected="sd"
+				fi
+				livedevice="/dev/$partition"
+				title=`cat /slroot/live/media/boot/syslinux/syslinux.cfg | grep "menu title " | cut -f3 -d' '`
+				echo "$title found on $livedevice"
+				break
+			else
+				umount /slroot/live/media
+			fi
+		fi
+	done
+	if [ "$mediadetected" == "none" ]; then
+		sleep 1
+		let sleeptime+=1
+		mdev -s
+	fi
+done
+
+if [ "$mediadetected" == "none" ]; then
+	echo "*** Live system error - live media not detected - exiting ***"
+	sh
+fi
+
+#copy live-media to RAM if requested
+if [ "$copy2ram" == "yes" ]; then
+	echo -n "Copying live system to RAM ..."
+	mkdir /slroot/live/tmp
+	mount --move /slroot/live/media /slroot/live/tmp
+	mount -t tmpfs none /slroot/live/media
+	
+	mkdir /slroot/live/media/boot
+	for bootfile in `find /slroot/live/tmp/boot -maxdepth 1 -type f`; do
+		cp $bootfile /slroot/live/media/boot/
+	done
+	cp -r /slroot/live/tmp/boot/syslinux /slroot/live/media/boot/
+	mkdir /slroot/live/media/boot/modules
+	for module in /slroot/live/tmp/boot/modules/*; do #first copy main non excluded modules
+		modulename=`basename $module`
+		if ! echo $exclude | sed 's/:/\n/g' | grep -q "^$modulename$"; then
+			cp /slroot/live/tmp/boot/modules/$modulename /slroot/live/media/boot/modules/
+		fi
+	done
+	mkdir /slroot/live/media/boot/optional
+	for modulename in `echo $include | sed 's/:/ /g'`; do #copy included optional modules
+		if [ -f /slroot/live/tmp/boot/optional/$modulename ]; then
+			cp /slroot/live/tmp/boot/optional/$modulename /slroot/live/media/boot/optional/
+		fi
+	done
+	
+	umount /slroot/live/tmp
+	rmdir /slroot/live/tmp
+	mount -o remount,ro /slroot/live/media
+	if [ "$mediadetected" == "cd" ]; then
+		eject $livedevice
+	fi
+	echo " done"
+fi
+
+#mount all modules in /live/modules/* except excluded ones
+mkdir /slroot/live/modules
+for module in /slroot/live/media/boot/modules/*; do
+	modulename=`basename $module`
+	if ! echo $exclude | sed 's/:/\n/g' | grep -q "^$modulename$"; then #if module is not excluded by bootparam
+		mkdir /slroot/live/modules/$modulename
+		mount -o loop -t squashfs $module /slroot/live/modules/$modulename
+		modulesbranches="/slroot/live/modules/$modulename=ro:$modulesbranches"
+		echo "Loading SquashFS module $modulename"
+	fi
+done
+
+#load requested optional modules
+for modulename in `echo $include | sed 's/:/ /g'`; do
+	if [ -f /slroot/live/media/boot/optional/$modulename ]; then
+		mkdir /slroot/live/modules/$modulename
+		mount -o loop -t squashfs /slroot/live/media/boot/optional/$modulename /slroot/live/modules/$modulename
+		modulesbranches="/slroot/live/modules/$modulename=ro:$modulesbranches"
+		echo "Loading SquashFS module $modulename"
+	fi
+done
+aufsmodulesbranches=`echo $modulesbranches | sed 's/:$//'`
+unionfsmodulesbranches=`echo $aufsmodulesbranches | sed 's/\/slroot//g'`
+
+#mount (union) all modules in /live/system (ro)
+mkdir /slroot/live/.nochanges #workaround because AUFS doesn't allow read-only union
+mkdir /slroot/live/system
+mount -t aufs -o ro,br=/slroot/live/.nochanges=rw:$aufsmodulesbranches none /slroot/live/system 2>/dev/null ||
+unionfs -o ro,allow_other,suid,dev,use_ino,cow,max_files=524288,chroot=/slroot $unionfsmodulesbranches /slroot/live/system
+
+#setup persistent system changes
+if [ ! -z "$changes" ] && [ ! "$copy2ram" == "yes" ] && [ "$mediadetected" != "cd" ]; then
+	mkdir /slroot/live/changes
+	if [ "$mediadetected" == "sd" ]; then
+		if [ ! -b $changes ]; then
+			mount -o remount,rw /slroot/live/media
+		fi
+		if echo $changes | grep -q "="; then
+			filesize=`echo "$changes" | cut -f2 -d=`
+			changes=`echo "$changes" | cut -f1 -d=`
+		fi
+		if [ ! -d /slroot/live/media/$changes ] && [ ! -f /slroot/live/media/$changes ] && [ ! -b $changes ]; then #storage space creation
+			if  [ ! -z "$filesize" ]; then
+				echo "Creating $changes ($filesize MB) persistent system storage ..."
+				dd if=/dev/zero of=/slroot/live/media/$changes bs=1024k count=0 seek=$filesize #TODO: check available space
+				sleep 1
+				mkfs.ext3 -F /slroot/live/media/$changes
+				sleep 1
+			else
+				#if mount | grep -q "$livedevice on /slroot/live/media type ext3"; then #TODO: check FS type
+				mkdir -p /slroot/live/media/$changes
+				#fi
+			fi
+		fi
+		if [ -d /slroot/live/media/$changes ] || [ -f /slroot/live/media/$changes ] || [ -b $changes ]; then
+			echo "Using persistent system storage ($changes)"
+			if [ -b $changes ]
+			then mount $changes /slroot/live/changes
+			else
+				if [ -d /slroot/live/media/$changes ]
+				then mount --bind /slroot/live/media/$changes /slroot/live/changes
+				else mount -o loop /slroot/live/media/$changes /slroot/live/changes
+				fi
+			fi
+		fi
+	else
+		echo "Using persistent system storage ($changes)"
+		mount -t nfs -o nolock $changes /slroot/live/changes #TODO: no auth / security
+	fi
+fi
+
+#mount (union) all modules (ro) and /live/changes (rw) in /live/union (rw)
+mkdir /slroot/live/union
+mkdir -p /slroot/live/changes
+mount -t aufs -o br=/slroot/live/changes=rw:$aufsmodulesbranches none /slroot/live/union 2>/dev/null ||
+unionfs -o allow_other,suid,dev,use_ino,cow,max_files=524288,chroot=/slroot /live/changes=rw:$unionfsmodulesbranches /slroot/live/union
+
+#setup system tree
+for directory in /slroot/live/union/*; do #bind /live/union top directories into /
+	directoryname=`basename $directory`
+	mkdir /slroot/$directoryname
+	mount --bind $directory /slroot/$directoryname
+done
+mkdir -p /slroot/tmp
+mkdir -p /slroot/sys
+mkdir -p /slroot/proc
+mkdir -p /slroot/dev
+mknod /slroot/dev/console c 5 1 2>/dev/null
+mknod /slroot/dev/null c 1 3 2>/dev/null #needed to mount /proc (rc.S) on read-only filesystem
+cat > /slroot/live/union/etc/fstab << END
+proc /proc proc defaults 0 0
+sysfs /sys sysfs defaults 0 0
+none / tmpfs defaults 0 0
+END
+
+#system startup tweaking
+if [ ! -z "$changes" ]; then
+	cp -f /slroot/live/system/etc/rc.d/rc.S /slroot/live/union/etc/rc.d/
+	cp -f /slroot/live/system/etc/rc.d/rc.M /slroot/live/union/etc/rc.d/
+	cp -f /slroot/live/system/etc/rc.d/rc.modules /slroot/live/union/etc/rc.d/
+	rm -f /slroot/live/union/etc/udev/rules.d/70-persistent-net.rules
+fi
+touch /slroot/live/union/etc/fastboot
+echo "cat /proc/mounts | grep -v '^rootfs' > /etc/mtab" >> /slroot/live/union/etc/rc.d/rc.S #update /etc/mtab
+echo "mount -o remount,rw /live/media" >> /slroot/live/union/etc/rc.d/rc.S
+if [ "$fastboot" == "yes" ]; then #faster startup (actions already done by "build-slackware-live.sh --sysprep")
+	sed	-e 's@\(.*/usr/bin/fc-cache -f.*\)@  : #\1@' \
+		-e 's@\(.*rc.udev start\)@      : #\1@' \
+		-e 's@\(.*icon.*${theme_dir}.*\)@      : #\1@' \
+		-e 's@\(.*/usr/bin/update.*--verbose\)@  : #\1@' \
+		-e 's@\(.*/usr/bin/update-mime-database /usr/share/mime\)@  : #\1@' \
+		-e 's@^\(.*/sbin/ldconfig &\)$@  : #\1@' \
+		-i /slroot/live/union/etc/rc.d/rc.M
+	sed	-e 's@^\(.*\)\(/sbin/depmod .*\)$@\1: #\2@' \
+		-e 's@\(.*\)\(NEWMODS=.*\)@\1: #\2@' \
+		-i /slroot/live/union/etc/rc.d/rc.modules
+fi
+if [ -x /slroot/live/union/etc/rc.d/rc.fuse ]; then
+	chmod a-x /slroot/live/union/etc/rc.d/rc.fuse
+fi
+if [ "$mediadetected" == "nfs" ] && [ -x /slroot/live/union/etc/rc.d/rc.networkmanager ]; then 
+	chmod -x /slroot/live/union/etc/rc.d/rc.networkmanager #if enabled, system hangs
+fi
+
+#system shutdown tweaking
+if [ ! -z "$changes" ]; then
+	cp -f /slroot/live/system/etc/rc.d/rc.6 /slroot/live/union/etc/rc.d/
+fi
+sed -i 's/\(\/rc.[06]\)\( fast\)*/\1 fast/' /slroot/live/union/etc/inittab #to prevent system hang at shutdown
+sed 	-e 's@^\( *\)\([a-z/]*sleep.*\)@\1: #\2@' \
+	-e 's@^\( *\)\([a-z/]*sync\)@\1: #\2@' \
+	-e 's@^\(.*umount.*\)$@\1 \>/dev/null 2\>\&1@' \
+	-i /slroot/live/union/etc/rc.d/rc.6
+if [ -z "$changes" ]
+then sed -e 's@^\(.*-o remount.*\)$@mount -o remount,ro /live/media #\1\n/bin/sync\n/bin/sleep 3@' -i /slroot/live/union/etc/rc.d/rc.6
+else sed -e 's@^\(.*-o remount.*\)$@mount -o remount,ro /live/media\nmount -o remount,ro /live/changes #\1\nsync; sleep 3@' \
+	-i /slroot/live/union/etc/rc.d/rc.6
+fi
+if [ "$mediadetected" == "nfs" ]; then
+	sed -e 's@^\( *\)\([a-z/]*fuser.*\)@\1: #\2@' \
+		-e 's@^\( *\)\([a-z/]*dhcpcd -k.*\)@\1: #\2@' \
+		-e 's@^\( *\)\(\. /etc/rc\.d/rc\.inet1 stop\)@\1: #\2@' \
+		-e 's@-t \(nfs,\)\(.*\)@-t \2 #\1@' \
+		-i /slroot/live/union/etc/rc.d/rc.6
+fi
+if [ "$mediadetected" == "cd" ] && [ ! "$copy2ram" == "yes" ]; then
+	sed	-e "s@\(/sbin/reboot\)@reboot -w; shutdown -k now \>/dev/null\n  cdrecord --eject dev=$livedevice \>/dev/null 2\>\&1\n  sleep 5\n  \1@" \
+		-e "s@\(/sbin/poweroff\)@poweroff -w; shutdown -k now \>/dev/null\n  cdrecord --eject dev=$livedevice \>/dev/null 2\>\&1\n  sleep 5\n  \1@" \
+		-i /slroot/live/union/etc/rc.d/rc.6
+fi
+
+#setup persistent homedir
+if [ ! -z "$home" ] && [ ! "$copy2ram" == "yes" ] && [ "$mediadetected" != "cd" ]; then
+	uid=1000
+	if [ -z "`grep "^[^:]\+:x:$uid:" /slroot/live/union/etc/passwd | cut -f1 -d:`" ]; then
+		uid=0
+	fi
+	homedir=`grep "x:$uid:" /slroot/live/union/etc/passwd | cut -f6 -d:`
+	gid=`grep "x:$uid:" /slroot/live/union/etc/passwd | cut -f4 -d:`
+	if [ "$mediadetected" == "sd" ]; then
+		if  [ ! -b $home ]; then
+			mount -o remount,rw /slroot/live/media
+		fi
+		if echo $home | grep -q "="; then
+			filesize=`echo "$home" | cut -f2 -d=`
+			home=`echo "$home" | cut -f1 -d=`
+		fi
+		if [ ! -d /slroot/live/media/$home ] && [ ! -f /slroot/live/media/$home ] && [ ! -b $home ]; then #storage space creation
+			if  [ ! -z "$filesize" ]; then
+				echo "Creating $home ($filesize MB) persistent home directory ..."
+				dd if=/dev/zero of=/slroot/live/media/$home bs=1024k count=0 seek=$filesize #TODO: check available space
+				sleep 1
+				mkfs.ext3 -F /slroot/live/media/$home
+				sleep 1
+				mount -o loop /slroot/live/media/$home /slroot/$homedir
+				cp -dpR /slroot/live/union/etc/skel/.??* /slroot/$homedir/
+				cp -dpR /slroot/live/union/etc/skel/* /slroot/$homedir/
+				chown -R $uid:$gid /slroot/$homedir
+				umount /slroot/$homedir
+			else
+				#if mount | grep -q "$livedevice on /slroot/live/media type ext3"; then #TODO: check FS type (vfat not supported)
+				mkdir -p /slroot/live/media/$home
+				cp -dpR /slroot/live/union/etc/skel/.??* /slroot/live/media/$home/
+				cp -dpR /slroot/live/union/etc/skel/* /slroot/live/media/$home/
+				chown -R $uid:$gid /slroot/live/media/$home
+				#fi
+			fi
+		fi
+		if [ -d /slroot/live/media/$home ] || [ -f /slroot/live/media/$home ] || [ -b $home ]; then
+			echo "Setting up persistent home directory ($home)"
+			if [ -b $home ]; then
+				mount $home /slroot/$homedir
+			else
+				if [ -d /slroot/live/media/$home ]
+				then mount --bind /slroot/live/media/$home /slroot/$homedir
+				else mount -o loop /slroot/live/media/$home /slroot/$homedir
+				fi
+			fi
+		fi
+	else
+		echo "Setting up persistent home directory ($home)"
+		mount -t nfs -o nolock $home /slroot/$homedir #TODO: no auth / security
+	fi
+fi
+
+#runlevel boot parameter handling 
+if [ ! -z "$runlevel" ]; then
+	echo "Setting up runlevel ($runlevel)"
+	sed -i s/^id:[1-5]:initdefault:$/id:$runlevel:initdefault:/ /slroot/live/union/etc/inittab
+fi
+
+#autologin
+runlevel=`cat /slroot/live/union/etc/inittab | sed -n /^id:[1-5]:initdefault:$/p | cut -f2 -d:`
+if [ $runlevel == 5 ]; then
+	sed -i 's/^c1:.*$/c1:5:respawn:\/sbin\/agetty -a linomad 38400 tty1 linux/' /slroot/live/union/etc/inittab
+	
+	if [ -x /slroot/live/union/usr/bin/startx ]; then
+		cat  > /slroot/live/union/etc/profile.d/x.sh << END
+if [ -z "\$DISPLAY" ] && [ "\`id -u\`" != "0" ] && [ "\`tty\`" == "/dev/tty1" ]; then
+	startx
+	logout
+fi
+END
+		chmod +x /slroot/live/union/etc/profile.d/x.sh
+	fi
+fi
+
+#system i18n setup
+if [ ! -z "$locale" ]; then
+	echo "Setting up locale ($locale)"
+	if [ -f /slroot/live/union/etc/profile.d/lang.sh ] && grep -q "^export LANG=" /slroot/live/union/etc/profile.d/lang.sh
+	then sed -i s/^export\ LANG=.*/export\ LANG=$locale/ /slroot/live/union/etc/profile.d/lang.sh
+	else echo "export LANG=$locale" >> /slroot/live/union/etc/profile.d/lang.sh
+	fi
+fi
+
+if [ ! -z "$keymap" ]; then
+	echo "Setting up keymap ($keymap)"
+	cat > /slroot/live/union/etc/rc.d/rc.keymap <<END
+#!/bin/sh
+if [ -x /usr/bin/loadkeys ]; then
+  /usr/bin/loadkeys $keymap
+fi
+END
+	chmod +x /slroot/live/union/etc/rc.d/rc.keymap
+	
+	if [ -d /slroot/live/union/etc/X11/xorg.conf.d ]; then #Xorg UDev keyboard configuration
+		xkblayout=`echo $keymap | cut -c1-2`
+		echo "Setting up Xorg keymap layout ($xkblayout)"
+		cat > /slroot/live/union/etc/X11/xorg.conf.d/20-keyboard.conf << END
+Section "InputClass"
+	Identifier "keyboard-all"
+	Driver "evdev"
+	Option "XkbLayout" "$xkblayout"
+	MatchIsKeyboard "on"
+EndSection
+END
+	fi
+fi
+
+if [ ! -z "$tz" ]; then
+	if [ -f /slroot/usr/share/zoneinfo/$tz ]; then
+		cat /slroot/usr/share/zoneinfo/$tz > /slroot/etc/localtime
+		ln -sf /usr/share/zoneinfo/$tz /slroot/etc/localtime-copied-from
+	fi
+fi
+if [ ! -z "$hwc" ]; then
+	if [ "$hwc" == "UTC" ] || [ "$hwc" == "localtime" ]; then
+		echo "$hwc" > /slroot/etc/hardwareclock
+	fi
+fi
+
+#setup everything needed to install live system
+if [ -f /build-slackware-live.sh ]; then
+	cp /build-slackware-live.sh /slroot/live/union/usr/sbin/
+	chmod +x /slroot/live/union/usr/sbin/build-slackware-live.sh
+fi
+
+#detect fixed partitions
+for partition in /sys/block/sd?/sd*; do
+	device=`echo $partition | cut -f4 -d/`
+	partition=`echo $partition | cut -f5 -d/`
+	if [ "$partition" != "sd*" ] && [ "`cat /sys/block/$device/removable`" == "0" ]; then
+		if swapon /dev/$partition >/dev/null 2>/dev/null; then
+			swapoff /dev/$partition
+			if [ "$useswap" == "yes" ]; then
+				echo "Enabling swap on /dev/$partition"
+				echo "/dev/$partition none swap defaults 0 0" >> /slroot/live/union/etc/fstab
+			else
+				echo "/dev/$partition none swap defaults,noauto 0 0" >> /slroot/live/union/etc/fstab
+			fi
+		else
+			echo "/dev/$partition /mnt/$partition auto defaults,noauto,user 0 0" >> /slroot/live/union/etc/fstab
+			mkdir -p /slroot/live/union/mnt/$partition
+		fi
+	fi
+done
+
+#setup root password
+if [ ! -z "$rootpw" ]; then
+	echo "Setting up root password"
+	echo "root:$rootpw" > /slroot/tmp/chpasswd.tmp
+	chroot /slroot /usr/sbin/chpasswd < /slroot/tmp/chpasswd.tmp
+	rm -f /slroot/tmp/chpasswd.tmp
+fi
+
+#chroot to live system
+umount /proc
+umount /sys
+mount -r -o remount /slroot 2>/dev/null #remount root directory read-only for normal startup
+sed -i 's/READWRITE=yes/:/' /slroot/etc/rc.d/rc.S 2>/dev/null #aufs doesn't allow remounting (claiming it is busy)
+echo "*** Live system ready ***"
+if [ ! -z "$debug" ]; then
+	sleep $debug
+fi
+echo ""
+exec switch_root /slroot /sbin/init

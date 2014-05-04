@@ -1,0 +1,2 @@
+Replace LiLo/eLiLo & Syslinux with GRUB or Update Syslinux for UEFI support ?
+Add gdisk to initrd to detect SWAP partitions (instead of trying to swap them on)

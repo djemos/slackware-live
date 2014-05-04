@@ -1,0 +1,541 @@
+diff -Naur slackware-live-0.4.orig/scripts/build-slackware-live.sh slackware-live-0.4/scripts/build-slackware-live.sh
+--- slackware-live-0.4.orig/scripts/build-slackware-live.sh	2014-02-11 20:32:24.000000000 +0000
++++ slackware-live-0.4/scripts/build-slackware-live.sh	2014-05-01 18:53:28.217577716 +0000
+@@ -57,9 +57,9 @@
+ 	umount $rootdirectory/proc
+ 	rm -f $rootdirectory/tmp/initrd.gz
+ 	rm -f $rootdirectory/tmp/initrd-tree/{initrd-name,keymap,luksdev,resumedev,rootfs,rootdev,wait-for-root}
+-	cp $initscriptbasepath/share/slackware-live/init $rootdirectory/tmp/initrd-tree/
++	cp $initscriptbasepath/share/slackware-live/{init,keymaps} $rootdirectory/tmp/initrd-tree/
+ 	chmod +x $rootdirectory/tmp/initrd-tree/init
+-	
++
+ 	cp $initscriptbasepath/sbin/build-slackware-live.sh $rootdirectory/tmp/initrd-tree/
+ 	
+ 	for prg in unionfs mkfs.ext3; do
+@@ -86,18 +86,19 @@
+ 	#BIOS/syslinux
+ 	mkdir -p $livedirectory/boot/syslinux
+ 	cp /usr/share/syslinux/menu.c32 $livedirectory/boot/syslinux/
++	cp /usr/share/syslinux/vesamenu.c32 $livedirectory/boot/syslinux/
+ 	if [ ! -f  $livedirectory/boot/syslinux/syslinux.cfg ]; then
+ 		cat > $livedirectory/boot/syslinux/syslinux.cfg << EOF
+-prompt 1
+-timeout 10
+-default slackware
+-
+-label slackware
+-	kernel /boot/vmlinuz
+-	append max_loop=255 initrd=/boot/initrd.gz runlevel=5
++INCLUDE /boot/menus/mainmenu.cfg
+ EOF
+ 	fi
+ 	
++	#Copy menus,splash image
++	if [ -d menus ]; then
++		cp -r menus $livedirectory/boot/
++		cp slackel.png relinfo.msg $livedirectory/boot/syslinux/
++	fi
++
+ 	#UEFI/elilo
+ 	if [ `uname -m` == "x86_64" ]; then
+ 		mkdir -p $livedirectory/EFI/BOOT
+@@ -108,10 +109,10 @@
+ 			cat > $livedirectory/EFI/BOOT/elilo.conf << EOF
+ prompt
+ timeout=10
+-default=slackware
++default=slackel
+ 
+ image=vmlinuz
+-	label=slackware
++	label=slackel
+ 	initrd=initrd.gz
+ 	append="max_loop=255 runlevel=5"
+ EOF
+@@ -253,7 +254,7 @@
+ 	if [ `uname -m` == "x86_64" ]; then
+ 		altboot="-eltorito-alt-boot -no-emul-boot -eltorito-platform efi -eltorito-boot efi.img"
+ 	fi
+-	mkisofs -J -d -N -l -r -V "Slackware-Live" -hide-rr-moved -o $imagefilename \
++	mkisofs -J -d -N -l -r -V "Slackel-Live" -hide-rr-moved -o $imagefilename \
+ 		-b boot/syslinux/isolinux.bin -boot-load-size 4 -boot-info-table -no-emul-boot \
+ 		-c boot/syslinux/boot.catalog -hide boot.catalog -hide-joliet boot.catalog $altboot \
+ 	   $livedirectory
+@@ -279,7 +280,7 @@
+ 			echo -e "2\nn\n\n\n+32M\nef00\nn\n\n\n\n\nr\nh\n1 2\nn\n\ny\n\nn\n\nn\nwq\ny\n" | gdisk $installdevice || return $PARTITIONERROR
+ 			partprobe $installdevice >/dev/null 2>&1; sleep 3
+ 			mkfs.fat -n "efi"  $installdevice"1" || return $FORMATERROR
+-			mkfs.ext3 -L "Slackware-Live" $installmedia || return $FORMATERROR
++			mkfs.ext3 -L "Slackel-Live" $installmedia || return $FORMATERROR
+ 		else #BIOS/MBR
+ 			partitionnumber=4
+ 			installmedia="$installdevice$partitionnumber"
+@@ -291,7 +292,7 @@
+ 			dd if=/dev/zero of=$installdevice bs=1 seek=446 count=64 >/dev/null 2>&1
+ 			echo -e ',0\n,0\n,0\n,,83,*' | sfdisk $installdevice || return $PARTITIONERROR
+ 			partprobe $installdevice; sleep 3
+-			mkfs.ext3 -L "Slackware-Live" $installmedia || return $FORMATERROR
++			mkfs.ext3 -L "Slackel-Live" $installmedia || return $FORMATERROR
+ 		fi
+ 		sleep 3
+ 	
+@@ -310,7 +311,7 @@
+ 			fi
+ 			case $partitiontype in
+ 			83|8300) 
+-				mkfs.ext3 -L "Slackware-Live" $installmedia || return $FORMATERROR
++				mkfs.ext3 -L "Slackel-Live" $installmedia || return $FORMATERROR
+ 				;;
+ 			*)
+ 				partition=`echo $installmedia | cut -c6-`
+@@ -319,7 +320,7 @@
+ 				if (( $size > 1024 )); then
+ 					fat32option="-F 32"
+ 				fi
+-				mkfs.fat $fat32option -n "Slackware-Live" $installmedia || return $FORMATERROR
++				mkfs.fat $fat32option -n "Slackel-Live" $installmedia || return $FORMATERROR
+ 			esac
+ 			sleep 3
+ 		fi
+@@ -374,6 +375,11 @@
+ 	rootdirectory=$1
+ 	systempart=$2
+ 	loadersetup=$3
++	rootpassword=$4
++	username=$5
++	userpassword=$6
++	installation_mode=$7
++	
+ 	SYSINSTALLFS="ext4"
+ 	
+ 	mkfs.$SYSINSTALLFS $systempart || return $FORMATERROR
+@@ -382,13 +388,42 @@
+ 	mount $systempart /mnt/install
+ 
+ 	#Copy begin
+-	for directory in $rootdirectory/*; do
+-		cp -dpr $directory /mnt/install/
+-	done
++	echo "Installing system"
++	# core, basic or full mode
++	if [ "$installation_mode" = "core" ]; then
++		echo "core installation"
++		modules=(01-core 04-common 05-kernel 06-live)
++		for directory in ${rootdirectory/modules[@].slm}/*; do
++			cp -dpr $directory/* /mnt/install/
++		done
++	fi
++	
++	if [ "$installation_mode" = "basic" ]; then
++		echo "basic installation"
++		modules=(01-core 02-basic 04-common 05-kernel 06-live)
++		for directory in ${rootdirectory/modules[@].slm}/*; do
++			cp -dpr $directory/* /mnt/install/
++		done
++	fi
++	
++	if [ "$installation_mode" = "full" ]; then
++		echo "full installation"
++		modules=(01-core 02-basic 03-full 04-common 05-kernel 06-live)
++		for directory in ${rootdirectory/modules[@].slm}/*; do
++			cp -dpr $directory/* /mnt/install/
++		done
++		
++		#for directory in $rootdirectory/*; do
++		#cp -dpr $directory /mnt/install/
++		#done		
++	fi
+ 	
+ 	mkdir -p /mnt/install/{dev,proc,sys,tmp}
+ 	cp -dpr /dev/sd* /mnt/install/dev/ #create disk nodes needed for LiLo
+-	cp -dpr $rootdirectory/lib/udev/devices/* /mnt/install/dev/
++	if [ "$rootdirectory" = "/live/modules" ]; then
++		cp -dpr /live/system/lib/udev/devices/* /mnt/install/dev/
++	fi
++	#cp -dpr $rootdirectory/lib/udev/devices/* /mnt/install/dev/
+ 
+ 	sed -i /^root:/d /mnt/install/etc/shadow #setup root password
+ 	cat /etc/shadow | sed -n /^root:/p >> /mnt/install/etc/shadow
+@@ -397,8 +432,8 @@
+ 		cp -f /etc/rc.d/rc.keymap /mnt/install/etc/rc.d/
+ 	fi
+ 	cp -f /etc/profile.d/lang.sh /mnt/install/etc/profile.d/
+-	if [ -f /etc/X11/xorg.conf.d/20-keyboard.conf ]; then
+-		cp -f /etc/X11/xorg.conf.d/20-keyboard.conf /mnt/install/etc/X11/xorg.conf.d/
++	if [ -f /etc/X11/xorg.conf.d/10-keyboard.conf ]; then
++		cp -f /etc/X11/xorg.conf.d/10-keyboard.conf /mnt/install/etc/X11/xorg.conf.d/
+ 	fi
+ 	if [ -f /etc/X11/xorg.conf ]; then
+ 		cp -f /etc/X11/xorg.conf /mnt/install/etc/X11/
+@@ -411,7 +446,7 @@
+ 		cp -f /etc/hardwareclock /mnt/install/etc/
+ 	fi
+ 	#Copy end
+-
++	echo "Setting up fstab"
+ 	#FSTab begin
+ 	cat > /mnt/install/etc/fstab << EOF
+ proc /proc proc defaults 0 0
+@@ -419,15 +454,16 @@
+ $systempart / $SYSINSTALLFS defaults 1 1
+ EOF
+ 	cat /etc/fstab | grep " swap " >> /mnt/install/etc/fstab
+-	cat /etc/fstab | grep "/mnt" |  grep -v "$systempart" >> /mnt/install/etc/fstab
+-	cat /etc/fstab | grep "/mnt" |  grep -v "$systempart" | cut -f2 -d' ' | while read mountpoint; do
+-		mkdir /mnt/install$mountpoint
+-	done
++	#cat /etc/fstab | grep "/mnt" |  grep -v "$systempart" >> /mnt/install/etc/fstab
++	#cat /etc/fstab | grep "/mnt" |  grep -v "$systempart" | cut -f2 -d' ' | while read mountpoint; do
++	#	mkdir /mnt/install$mountpoint
++	#done
+ 	echo "$systempart / $SYSINSTALLFS defaults 1 1" > /mnt/install/etc/mtab
+ 	#FSTab end
+-	
++
+ 	#InitRD begin
+ 	if [ ! -f /mnt/install/boot/initrd.gz ]; then
++		echo "Setting initrd"
+ 		kv=`basename /mnt/install/lib/modules/*`
+ 		if lsmod | grep -q $SYSINSTALLFS; then
+ 			moduleslist="$SYSINSTALLFS"
+@@ -453,6 +489,7 @@
+ 	#InitRD end
+ 	
+ 	#LiLo begin
++	echo "Setting (e)Lilo"
+ 	if [ "$loadersetup" == "-auto" ]; then
+ 		installdevice=`echo $systempart | cut -c1-8`
+ 		if [ -d /sys/firmware/efi ]; then #UEFI
+@@ -462,7 +499,7 @@
+ 			if [ ! -z "$efipartition" ]; then
+ 				mkdir -p /mnt/efi
+ 				mount $efipartition /mnt/efi
+-				efilabel="Slackware"
++				efilabel="Slackel"
+ 				if [ -d /mnt/efi/EFI/$efilabel ]; then
+ 					conflictpart=`cat /mnt/efi/EFI/$efilabel/elilo.conf | grep "append" | sed 's/.*root=\([^ ]*\).*/\1/'`
+ 					if [ "$conflictpart" == "$systempart" ]
+@@ -476,10 +513,10 @@
+ 				cp /mnt/install/boot/vmlinuz /mnt/efi/EFI/$efilabel/
+ 				cat > /mnt/efi/EFI/$efilabel/elilo.conf << EOF
+ timeout=1
+-default=slackware
++default=slackel
+ 
+ image=vmlinuz
+-    label=slackware
++    label=slackel
+     append="root=$systempart ro"
+ 	read-only
+ EOF
+@@ -489,14 +526,14 @@
+ 				fi
+ 				umount /mnt/efi
+ 				rmdir /mnt/efi
+-				efibootmgr -q -c -d $installdevice -p $efipartnum -l "\\EFI\\$efilabel\\elilo.efi" -L "Slackware ($systempart)"
++				efibootmgr -q -c -d $installdevice -p $efipartnum -l "\\EFI\\$efilabel\\elilo.efi" -L "Slackel ($systempart)"
+ 			fi
+ 		else #BIOS
+ 			echo "boot = $installdevice" > /mnt/install/etc/lilo.conf
+-			if [ -f /mnt/install/boot/slack.bmp ]; then
++			if [ -f /mnt/install/boot/slackel.bmp ]; then
+ 				cat >> /mnt/install/etc/lilo.conf << EOF
+ 
+-bitmap = /boot/slack.bmp
++bitmap = /boot/slackel.bmp
+ bmp-colors = 255,0,255,0,255,0
+ bmp-table = 60,6,1,16
+ bmp-timer = 65,27,0,255
+@@ -514,7 +551,7 @@
+ 
+ image = /boot/vmlinuz
+ root = $systempart
+-label = Linux
++label = slackel
+ read-only
+ EOF
+ 			if [ -f /mnt/install/boot/initrd.gz ]; then
+@@ -535,6 +572,162 @@
+ 		fi
+ 	fi
+ 	#LiLo end
++	liveuser=$(cat /etc/passwd | grep /bin/bash | grep /home/| cut -d : -f 1)
++	if [ "$liveuser" != "" ]; then 
++		echo "Deleting liveuser $liveuser"
++		chroot /mnt/install mount /proc
++		chroot /mnt/install /usr/sbin/userdel -r $liveuser 2>/dev/null
++		chroot /mnt/install umount /proc
++	fi
++	
++	if [ "$username" != "" ]; then 
++		echo "Creating user $username with password $userpassword"
++		chroot /mnt/install mount /proc
++		chroot /mnt/install /usr/sbin/useradd -s /bin/bash -g users -m -k /etc/skel -G lp,floppy,audio,video,cdrom,plugdev,power,netdev,scanner,wheel "$username"
++		chroot /mnt/install umount /proc
++	fi
++	
++	if [ "$userpassword" != "" ]; then 
++		echo "Setting password for user $username to $userpassword"
++		chroot /mnt/install mount /proc
++		echo ${username}:${userpassword} | chroot /mnt/install chpasswd
++		chroot /mnt/install umount /proc
++	fi
++	
++	if [ "$rootpassword" != "" ]; then 
++		echo "Setting password for root to $rootpassword"
++		chroot /mnt/install mount /proc
++		echo root:${rootpassword} | chroot /mnt/install chpasswd
++		chroot /mnt/install umount /proc
++	fi
++	
++	if [ -f /mnt/install/etc/kde/kdm/kdmrc ]; then
++	  sed -i "s/NoPassEnable=.*/NoPassEnable=/g" /mnt/install/etc/kde/kdm/kdmrc
++	  sed -i "s/NoPassUsers=.*/NoPassUsers=/g" /mnt/install/etc/kde/kdm/kdmrc
++	  sed -i "s/DefaultUser=.*/DefaultUser=/g" /mnt/install/etc/kde/kdm/kdmrc
++	  sed -i "s/AllowNullPasswd=.*/AllowNullPasswd=/g" /mnt/install/etc/kde/kdm/kdmrc
++	  sed -i "s/AutoLoginEnable=.*/AutoLoginEnable=/g" /mnt/install/etc/kde/kdm/kdmrc
++	  sed -i "s/AutoLoginUser=.*/AutoLoginUser=/g" /mnt/install/etc/kde/kdm/kdmrc
++	fi
++	
++	if [ -f /mnt/install/etc/gdm/custom.conf ]; then
++	cat > /mnt/install/etc/gdm/custom.conf << EOF
++# GDM Custom Configuration file.
++#
++# This file is the appropriate place for specifying your customizations to the
++# GDM configuration.   If you run gdmsetup, it will automatically edit this
++# file for you and will cause the daemon and any running GDM GUI programs to
++# automatically update with the new configuration.  Not all configuration
++# options are supported by gdmsetup, so to modify some values it may be
++# necessary to modify this file directly by hand.
++#
++# This file overrides the default configuration settings.  These settings 
++# are stored in the GDM System Defaults configuration file, which is found
++# at the following location.
++#
++# /usr/share/gdm/defaults.conf.  
++#
++# This file contains comments about the meaning of each configuration option,
++# so is also a useful reference.  Also refer to the documentation links at
++# the end of this comment for further information.  In short, to hand-edit
++# this file, simply add or modify the key=value combination in the
++# appropriate section in the template below this comment section.
++#
++# For example, if you want to specify a different value for the Enable key
++# in the "[debug]" section of your GDM System Defaults configuration file,
++# then add "Enable=true" in the "[debug]" section of this file.  If the
++# key already exists in this file, then simply modify it.
++#
++# Older versions of GDM used the "gdm.conf" file for configuration.  If your
++# system has an old gdm.conf file on the system, it will be used instead of
++# this file - so changes made to this file will not take effect.  Consider
++# migrating your configuration to this file and removing the gdm.conf file.
++#
++# If you hand edit a GDM configuration file, you can run the following
++# command and the GDM daemon will immediately reflect the change.  Any
++# running GDM GUI programs will also be notified to update with the new
++# configuration.
++#
++# gdmflexiserver --command="UPDATE_CONFIG <configuration key>"
++#
++# e.g, the "Enable" key in the "[debug]" section would be "debug/Enable".
++#
++# You can also run gdm-restart or gdm-safe-restart to cause GDM to restart and
++# re-read the new configuration settings.  You can also restart GDM by sending
++# a HUP or USR1 signal to the daemon.  HUP behaves like gdm-restart and causes
++# any user session started by GDM to exit immediately while USR1 behaves like
++# gdm-safe-restart and will wait until all users log out before restarting GDM.
++#
++# For full reference documentation see the gnome help browser under
++# GNOME|System category.  You can also find the docs in HTML form on
++# http://www.gnome.org/projects/gdm/
++#
++# NOTE: Lines that begin with "#" are considered comments.
++#
++# Have fun!
++
++[daemon]
++
++[security]
++
++[xdmcp]
++
++[gui]
++
++[greeter]
++
++[chooser]
++
++[debug]
++
++# Note that to disable servers defined in the GDM System Defaults
++# configuration file (such as 0=Standard, you must put a line in this file
++# that says 0=inactive, as described in the Configuration section of the GDM
++# documentation.
++#
++[servers]
++
++# Also note, that if you redefine a [server-foo] section, then GDM will
++# use the definition in this file, not the GDM System Defaults configuration
++# file.  It is currently not possible to disable a [server-foo] section
++# defined in the GDM System Defaults configuration file.
++#
++EOF
++	fi
++	
++	echo "Removing installer"
++	chroot /mnt/install mount /proc
++	#chroot /mnt/install rm -f /home/one/Desktop/slackel-live-installer.desktop
++	chroot /mnt/install rm -f /home/one/Desktop/sli*.desktop
++	#chroot /mnt/install spkg -d slackel-live-installer
++	chroot /mnt/install spkg -d sli
++	chroot /mnt/install umount /proc
++	
++	# Run various slackware install routines
++	echo "Run various slackware install routines"
++	chroot /mnt/install mount /proc
++	if [ -f /mnt/install/var/log/setup/setup.04.mkfontdir ]; then
++		chroot /mnt/install /var/log/setup/setup.04.mkfontdir
++	fi
++	
++	if [ -f mnt/install/var/log/setup/setup.08.gtk-update-icon-cache ]; then
++		chroot /mnt/install /var/log/setup/setup.08.gtk-update-icon-cache
++	fi
++	
++	if [ -f mnt/install/usr/sbin/update-all ]; then
++		chroot /mnt/install /usr/sbin/update-all
++	fi
++	
++	if [ -f mnt/install/var/log/setup/setup.services ]; then
++		chroot /mnt/install /var/log/setup/setup.services
++	fi
++	
++	chroot /mnt/install umount /proc
++	
++	# Set the hostname.
++	chmod 777 /mnt/install/etc/HOSTNAME
++	echo "slackel.example.net" > /mnt/install/etc/HOSTNAME
++	chmod 644 /mnt/install/etc/HOSTNAME  
+ 	
+ 	umount /mnt/install
+ 	rmdir /mnt/install
+@@ -730,6 +923,11 @@
+ 	rootdirectory=$2
+ 	systempart=$3
+ 	loadersetup=$4
++	rootpassword=$5
++	username=$6
++	userpassword=$7
++	installation_mode=$8
++	
+ 	if [ -d "$rootdirectory" ] && [ -b "$systempart" ]; then
+ 		systemsize=`du -s -m $rootdirectory | sed 's/\t.*//'`
+ 		device=`echo $systempart | cut -c6-8`
+@@ -741,11 +939,11 @@
+ 			echo "error: insufficant space on device '$systempart'"
+ 			exit $INSUFFICIENTSPACE
+ 		else
+-			install_system $rootdirectory $systempart $loadersetup
++			install_system $rootdirectory $systempart $loadersetup $rootpassword $username $userpassword $installation_mode
+ 			exit $!
+ 		fi
+ 	else
+-		echo "`basename $0` --install root_dir device [-auto|-expert]"
++		echo "`basename $0` --install root_dir device [-auto|-expert] rootpassword username userpassword"
+ 		exit $CMDERROR
+ 	fi
+ 	;;
+diff -Naur slackware-live-0.4.orig/scripts/init slackware-live-0.4/scripts/init
+--- slackware-live-0.4.orig/scripts/init	2014-02-07 09:04:23.000000000 +0000
++++ slackware-live-0.4/scripts/init	2014-05-01 17:43:07.036373421 +0000
+@@ -328,30 +328,59 @@
+ 	then sed -i s/^export\ LANG=.*/export\ LANG=$locale/ /slroot/live/union/etc/profile.d/lang.sh
+ 	else echo "export LANG=$locale" >> /slroot/live/union/etc/profile.d/lang.sh
+ 	fi
++	if [ -f /slroot/live/union/etc/kde/kdm/kdmrc ]; then
++      locale_noutf8=$(echo $lang | sed 's/\.utf8//')
++      sed -i "s/\(^\|^#\)Language=.*/Language=$locale_noutf8/" /slroot/live/union/etc/kde/kdm/kdmrc
++    fi    
++    # Make firefox match OS locale
++  # Now included in Salix version, but keep it for other Slackware version or distro
++  if [ -w /slroot/live/union/usr/lib$LIBSUFFIX/firefox/greprefs/all.js ]; then
++    sed -i -e 's/pref("intl.locale.matchOS", false);/pref("intl.locale.matchOS", true);/g' /slroot/live/union/usr/lib$LIBSUFFIX/firefox/greprefs/all.js
++  fi
++  # Make thunderbird match OS locale
++  # Now included in Salix version, but keep it for other Slackware version or distro
++  if [ -w /slroot/live/union/usr/lib$LIBSUFFIX/thunderbird/greprefs/all.js ]; then
++    sed -i -e 's/pref("intl.locale.matchOS", false);/pref("intl.locale.matchOS", true);/g' /slroot/live/union/usr/lib$LIBSUFFIX/thunderbird/greprefs/all.js
++  fi
+ fi
+ 
+ if [ ! -z "$keymap" ]; then
+-	echo "Setting up keymap ($keymap)"
+-	cat > /slroot/live/union/etc/rc.d/rc.keymap <<END
+-#!/bin/sh
+-if [ -x /usr/bin/loadkeys ]; then
+-  /usr/bin/loadkeys $keymap
+-fi
+-END
+-	chmod +x /slroot/live/union/etc/rc.d/rc.keymap
+-	
+-	if [ -d /slroot/live/union/etc/X11/xorg.conf.d ]; then #Xorg UDev keyboard configuration
+-		xkblayout=`echo $keymap | cut -c1-2`
+-		echo "Setting up Xorg keymap layout ($xkblayout)"
+-		cat > /slroot/live/union/etc/X11/xorg.conf.d/20-keyboard.conf << END
++ keyb=$keymap
++ if [ -n "$keyb" ] || [-n "$numlock" ] || [ -n "$scim" ] || [ -n "$ibus" ]; then
++  # keyboard settting
++  [ -n "$keyb" ] || keyb=us
++  [ -n "$numlock" ] || numlock=off
++  [ -n "$scim" ] || scim=off
++  [ -n "$ibus" ] || ibus=off
++ 
++ grep "^$keyb|.*|.*|.*" /keymaps | sed -e "s/^.*|\(.*\)|\(.*\)|\(.*\)/\1|\2|\3/" > /slroot/live/union/tmp/xkb
++    xkblayout="$(sed -e "s/^\(.*\)|.*|.*/\1/" /slroot/live/union/tmp/xkb)"
++    xkbvariant="$(sed -e "s/^.*|\(.*\)|.*/\1/" /slroot/live/union/tmp/xkb)"
++    xkboptions="$(sed -e "s/^.*|.*|\(.*\)/\1/" /slroot/live/union/tmp/xkb)"
++    rm /slroot/live/union/tmp/xkb
++    # Fall back to keymap if no xkb maping available
++    if [ -z "$xkblayout" ]; then
++      xkblayout="$keyb"
++      xkbvariant=""
++      xkboptions=""
++    fi
++    /usr/bin/loadkeys -u $keyb.map 1>&2 2>/dev/null
++    if [ -e /slroot/live/union/etc/rc.d/rc.keymap ]; then
++      sed -i "s/\(^[ \t]*\/usr\/bin\/loadkeys -u\).*$/\1 $keyb.map/" /slroot/live/union/etc/rc.d/rc.keymap
++    fi
++    if [ -e /slroot/live/union/etc/X11/xorg.conf.d ]; then
++      cat <<EOF > /slroot/live/union/etc/X11/xorg.conf.d/10-keymap.conf
+ Section "InputClass"
+-	Identifier "keyboard-all"
+-	Driver "evdev"
+-	Option "XkbLayout" "$xkblayout"
+-	MatchIsKeyboard "on"
++Identifier "Keyboard settings"
++MatchIsKeyboard "yes"
++Driver "evdev"
++Option "XkbLayout" "$xkblayout"
++Option "XkbVariant" "$xkbvariant"
++Option "XkbOptions" "$xkboptions"
+ EndSection
+-END
++EOF
+ 	fi
++ fi
+ fi
+ 
+ if [ ! -z "$tz" ]; then
+@@ -385,9 +414,9 @@
+ 			else
+ 				echo "/dev/$partition none swap defaults,noauto 0 0" >> /slroot/live/union/etc/fstab
+ 			fi
+-		else
+-			echo "/dev/$partition /mnt/$partition auto defaults,noauto,user 0 0" >> /slroot/live/union/etc/fstab
+-			mkdir -p /slroot/live/union/mnt/$partition
++		#else
++		#	echo "/dev/$partition /mnt/$partition auto defaults,noauto,user 0 0" >> /slroot/live/union/etc/fstab
++		#	mkdir -p /slroot/live/union/mnt/$partition
+ 		fi
+ 	fi
+ done

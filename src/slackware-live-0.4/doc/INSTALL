@@ -1,0 +1,11 @@
+Slackware-Live requires the following utilities (and their dependencies) to operate:
+- UnionFS-FUSE or AUFS (if kernel support it),
+- SquashFS-Tools - support XZ/LZMA compression if kernel and tools support it (XZ is enabled in 2.6.38 Slackware testing kernel),
+- SysLinux & eLiLo,
+- MkInitRD.
+
+The installation procedure is:
+1) extract the archive containing the program sources,
+2) run the command `make install'
+	(or `make install DESTDIR=/absolute/path/to/destination' to place the files
+	in a temporary location instead of the expected one).

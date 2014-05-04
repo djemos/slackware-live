@@ -1,0 +1,24 @@
+===== Live media files organization =====
+- `/boot/vmlinuz', `/boot/initrd.gz' (kernel and InitRD);
+, `/boot/liveboot' (cookie for InitRD to recognize live media -- no particular content is needed);
+- `/boot/syslinux' (SysLinux config files);
+- `/boot/modules' and `/boot/optional' (SquashFS modules);
+- `/EFI/BOOT/*', UEFI booting files (eLilo, kernel and initrd)
+- `/efi.img', image of `/EFI' directory content, for CD/DVD UEFI booting
+
+
+===== Live system files organisation during execution =====
+- The directory `/live/media' is the live media mount point (CD/DVD/USB);
+- the directory `/live/modules' contains the SquashFS modules mount points;
+- the directory `/live/system' is the union of the modules mount points (read-only);
+it is used for live system installation;
+- the directory `/live/union' is the union of the directory `/live/changes' (write) and of the modules mount points;
+- the directory `/live/changes' contains the modifications done to the live system (copy on write);
+- the directories at root are mount points binded to the directories of `/live/union'
+(`mount --bin /live/union/bin /bin', ...).
+
+
+===== Conversion of a SquashFS module into a directory =====
+- Mount the module: `mount -o loop -t squashfs the_module mount_point';
+- copy files into an other directory: `cp -dpr mount_point destination_directory';
+- umount the module: `umount mount_point'.
