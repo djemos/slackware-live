@@ -11,3 +11,5 @@ A GUI for the installation program and a synchronization tool (for home director
 
 This creates an initrd and a Slackel ive iso and also is used to install the live iso creating a new user and a password and set a password for root.
 Can also install the live iso as a frugal installation to a usb to use persistence.
+
+All changes made for slackel are on paches.patch file
