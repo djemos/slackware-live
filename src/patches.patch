@@ -163,8 +163,8 @@ diff -Naur slackware-live-0.4.orig/scripts/build-slackware-live.sh slackware-liv
  	cp -f /etc/profile.d/lang.sh /mnt/install/etc/profile.d/
 -	if [ -f /etc/X11/xorg.conf.d/20-keyboard.conf ]; then
 -		cp -f /etc/X11/xorg.conf.d/20-keyboard.conf /mnt/install/etc/X11/xorg.conf.d/
-+	if [ -f /etc/X11/xorg.conf.d/10-keyboard.conf ]; then
-+		cp -f /etc/X11/xorg.conf.d/10-keyboard.conf /mnt/install/etc/X11/xorg.conf.d/
++	if [ -f /etc/X11/xorg.conf.d/10-keymap.conf ]; then
++		cp -f /etc/X11/xorg.conf.d/10-keymap.conf /mnt/install/etc/X11/xorg.conf.d/
  	fi
  	if [ -f /etc/X11/xorg.conf ]; then
  		cp -f /etc/X11/xorg.conf /mnt/install/etc/X11/
