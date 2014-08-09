@@ -1,6 +1,6 @@
 diff -Naur slackware-live-0.4.orig/scripts/build-slackware-live.sh slackware-live-0.4/scripts/build-slackware-live.sh
---- slackware-live-0.4.orig/scripts/build-slackware-live.sh	2014-02-11 20:32:24.000000000 +0000
-+++ slackware-live-0.4/scripts/build-slackware-live.sh	2014-05-01 18:53:28.217577716 +0000
+--- slackware-live-0.4.orig/scripts/build-slackware-live.sh	2014-02-11 22:32:24.000000000 +0200
++++ slackware-live-0.4/scripts/build-slackware-live.sh	2014-08-09 09:44:51.592574497 +0300
 @@ -57,9 +57,9 @@
  	umount $rootdirectory/proc
  	rm -f $rootdirectory/tmp/initrd.gz
@@ -13,7 +13,7 @@ diff -Naur slackware-live-0.4.orig/scripts/build-slackware-live.sh slackware-liv
  	cp $initscriptbasepath/sbin/build-slackware-live.sh $rootdirectory/tmp/initrd-tree/
  	
  	for prg in unionfs mkfs.ext3; do
-@@ -86,18 +86,19 @@
+@@ -86,18 +86,23 @@
  	#BIOS/syslinux
  	mkdir -p $livedirectory/boot/syslinux
  	cp /usr/share/syslinux/menu.c32 $livedirectory/boot/syslinux/
@@ -36,11 +36,15 @@ diff -Naur slackware-live-0.4.orig/scripts/build-slackware-live.sh slackware-liv
 +		cp -r menus $livedirectory/boot/
 +		cp slackel.png relinfo.msg $livedirectory/boot/syslinux/
 +	fi
-+
++	
++	if [ -d install_on_usb ]; then
++		cp install_on_usb/* $livedirectory/boot/syslinux/
++	fi
++	
  	#UEFI/elilo
  	if [ `uname -m` == "x86_64" ]; then
  		mkdir -p $livedirectory/EFI/BOOT
-@@ -108,10 +109,10 @@
+@@ -108,10 +113,10 @@
  			cat > $livedirectory/EFI/BOOT/elilo.conf << EOF
  prompt
  timeout=10
@@ -53,7 +57,7 @@ diff -Naur slackware-live-0.4.orig/scripts/build-slackware-live.sh slackware-liv
  	initrd=initrd.gz
  	append="max_loop=255 runlevel=5"
  EOF
-@@ -253,7 +254,7 @@
+@@ -253,7 +258,7 @@
  	if [ `uname -m` == "x86_64" ]; then
  		altboot="-eltorito-alt-boot -no-emul-boot -eltorito-platform efi -eltorito-boot efi.img"
  	fi
@@ -62,7 +66,7 @@ diff -Naur slackware-live-0.4.orig/scripts/build-slackware-live.sh slackware-liv
  		-b boot/syslinux/isolinux.bin -boot-load-size 4 -boot-info-table -no-emul-boot \
  		-c boot/syslinux/boot.catalog -hide boot.catalog -hide-joliet boot.catalog $altboot \
  	   $livedirectory
-@@ -279,7 +280,7 @@
+@@ -279,7 +284,7 @@
  			echo -e "2\nn\n\n\n+32M\nef00\nn\n\n\n\n\nr\nh\n1 2\nn\n\ny\n\nn\n\nn\nwq\ny\n" | gdisk $installdevice || return $PARTITIONERROR
  			partprobe $installdevice >/dev/null 2>&1; sleep 3
  			mkfs.fat -n "efi"  $installdevice"1" || return $FORMATERROR
@@ -71,7 +75,7 @@ diff -Naur slackware-live-0.4.orig/scripts/build-slackware-live.sh slackware-liv
  		else #BIOS/MBR
  			partitionnumber=4
  			installmedia="$installdevice$partitionnumber"
-@@ -291,7 +292,7 @@
+@@ -291,7 +296,7 @@
  			dd if=/dev/zero of=$installdevice bs=1 seek=446 count=64 >/dev/null 2>&1
  			echo -e ',0\n,0\n,0\n,,83,*' | sfdisk $installdevice || return $PARTITIONERROR
  			partprobe $installdevice; sleep 3
@@ -80,7 +84,7 @@ diff -Naur slackware-live-0.4.orig/scripts/build-slackware-live.sh slackware-liv
  		fi
  		sleep 3
  	
-@@ -310,7 +311,7 @@
+@@ -310,7 +315,7 @@
  			fi
  			case $partitiontype in
  			83|8300) 
@@ -89,7 +93,7 @@ diff -Naur slackware-live-0.4.orig/scripts/build-slackware-live.sh slackware-liv
  				;;
  			*)
  				partition=`echo $installmedia | cut -c6-`
-@@ -319,7 +320,7 @@
+@@ -319,7 +324,7 @@
  				if (( $size > 1024 )); then
  					fat32option="-F 32"
  				fi
@@ -98,7 +102,7 @@ diff -Naur slackware-live-0.4.orig/scripts/build-slackware-live.sh slackware-liv
  			esac
  			sleep 3
  		fi
-@@ -374,6 +375,11 @@
+@@ -374,6 +379,11 @@
  	rootdirectory=$1
  	systempart=$2
  	loadersetup=$3
@@ -110,7 +114,7 @@ diff -Naur slackware-live-0.4.orig/scripts/build-slackware-live.sh slackware-liv
  	SYSINSTALLFS="ext4"
  	
  	mkfs.$SYSINSTALLFS $systempart || return $FORMATERROR
-@@ -382,13 +388,42 @@
+@@ -382,13 +392,42 @@
  	mount $systempart /mnt/install
  
  	#Copy begin
@@ -157,7 +161,7 @@ diff -Naur slackware-live-0.4.orig/scripts/build-slackware-live.sh slackware-liv
  
  	sed -i /^root:/d /mnt/install/etc/shadow #setup root password
  	cat /etc/shadow | sed -n /^root:/p >> /mnt/install/etc/shadow
-@@ -397,8 +432,8 @@
+@@ -397,8 +436,8 @@
  		cp -f /etc/rc.d/rc.keymap /mnt/install/etc/rc.d/
  	fi
  	cp -f /etc/profile.d/lang.sh /mnt/install/etc/profile.d/
@@ -168,7 +172,7 @@ diff -Naur slackware-live-0.4.orig/scripts/build-slackware-live.sh slackware-liv
  	fi
  	if [ -f /etc/X11/xorg.conf ]; then
  		cp -f /etc/X11/xorg.conf /mnt/install/etc/X11/
-@@ -411,7 +446,7 @@
+@@ -411,7 +450,7 @@
  		cp -f /etc/hardwareclock /mnt/install/etc/
  	fi
  	#Copy end
@@ -177,7 +181,7 @@ diff -Naur slackware-live-0.4.orig/scripts/build-slackware-live.sh slackware-liv
  	#FSTab begin
  	cat > /mnt/install/etc/fstab << EOF
  proc /proc proc defaults 0 0
-@@ -419,15 +454,16 @@
+@@ -419,15 +458,16 @@
  $systempart / $SYSINSTALLFS defaults 1 1
  EOF
  	cat /etc/fstab | grep " swap " >> /mnt/install/etc/fstab
@@ -199,7 +203,7 @@ diff -Naur slackware-live-0.4.orig/scripts/build-slackware-live.sh slackware-liv
  		kv=`basename /mnt/install/lib/modules/*`
  		if lsmod | grep -q $SYSINSTALLFS; then
  			moduleslist="$SYSINSTALLFS"
-@@ -453,6 +489,7 @@
+@@ -453,6 +493,7 @@
  	#InitRD end
  	
  	#LiLo begin
@@ -207,7 +211,7 @@ diff -Naur slackware-live-0.4.orig/scripts/build-slackware-live.sh slackware-liv
  	if [ "$loadersetup" == "-auto" ]; then
  		installdevice=`echo $systempart | cut -c1-8`
  		if [ -d /sys/firmware/efi ]; then #UEFI
-@@ -462,7 +499,7 @@
+@@ -462,7 +503,7 @@
  			if [ ! -z "$efipartition" ]; then
  				mkdir -p /mnt/efi
  				mount $efipartition /mnt/efi
@@ -216,7 +220,7 @@ diff -Naur slackware-live-0.4.orig/scripts/build-slackware-live.sh slackware-liv
  				if [ -d /mnt/efi/EFI/$efilabel ]; then
  					conflictpart=`cat /mnt/efi/EFI/$efilabel/elilo.conf | grep "append" | sed 's/.*root=\([^ ]*\).*/\1/'`
  					if [ "$conflictpart" == "$systempart" ]
-@@ -476,10 +513,10 @@
+@@ -476,10 +517,10 @@
  				cp /mnt/install/boot/vmlinuz /mnt/efi/EFI/$efilabel/
  				cat > /mnt/efi/EFI/$efilabel/elilo.conf << EOF
  timeout=1
@@ -229,7 +233,7 @@ diff -Naur slackware-live-0.4.orig/scripts/build-slackware-live.sh slackware-liv
      append="root=$systempart ro"
  	read-only
  EOF
-@@ -489,14 +526,14 @@
+@@ -489,14 +530,14 @@
  				fi
  				umount /mnt/efi
  				rmdir /mnt/efi
@@ -247,7 +251,7 @@ diff -Naur slackware-live-0.4.orig/scripts/build-slackware-live.sh slackware-liv
  bmp-colors = 255,0,255,0,255,0
  bmp-table = 60,6,1,16
  bmp-timer = 65,27,0,255
-@@ -514,7 +551,7 @@
+@@ -514,7 +555,7 @@
  
  image = /boot/vmlinuz
  root = $systempart
@@ -256,7 +260,7 @@ diff -Naur slackware-live-0.4.orig/scripts/build-slackware-live.sh slackware-liv
  read-only
  EOF
  			if [ -f /mnt/install/boot/initrd.gz ]; then
-@@ -535,6 +572,162 @@
+@@ -535,6 +576,162 @@
  		fi
  	fi
  	#LiLo end
@@ -419,7 +423,7 @@ diff -Naur slackware-live-0.4.orig/scripts/build-slackware-live.sh slackware-liv
  	
  	umount /mnt/install
  	rmdir /mnt/install
-@@ -730,6 +923,11 @@
+@@ -730,6 +927,11 @@
  	rootdirectory=$2
  	systempart=$3
  	loadersetup=$4
@@ -431,7 +435,7 @@ diff -Naur slackware-live-0.4.orig/scripts/build-slackware-live.sh slackware-liv
  	if [ -d "$rootdirectory" ] && [ -b "$systempart" ]; then
  		systemsize=`du -s -m $rootdirectory | sed 's/\t.*//'`
  		device=`echo $systempart | cut -c6-8`
-@@ -741,11 +939,11 @@
+@@ -741,11 +943,11 @@
  			echo "error: insufficant space on device '$systempart'"
  			exit $INSUFFICIENTSPACE
  		else
@@ -446,8 +450,8 @@ diff -Naur slackware-live-0.4.orig/scripts/build-slackware-live.sh slackware-liv
  	fi
  	;;
 diff -Naur slackware-live-0.4.orig/scripts/init slackware-live-0.4/scripts/init
---- slackware-live-0.4.orig/scripts/init	2014-02-07 09:04:23.000000000 +0000
-+++ slackware-live-0.4/scripts/init	2014-05-01 17:43:07.036373421 +0000
+--- slackware-live-0.4.orig/scripts/init	2014-02-07 11:04:23.000000000 +0200
++++ slackware-live-0.4/scripts/init	2014-05-01 20:43:07.036373421 +0300
 @@ -328,30 +328,59 @@
  	then sed -i s/^export\ LANG=.*/export\ LANG=$locale/ /slroot/live/union/etc/profile.d/lang.sh
  	else echo "export LANG=$locale" >> /slroot/live/union/etc/profile.d/lang.sh
