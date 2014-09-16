@@ -1,6 +1,6 @@
 diff -Naur slackware-live-0.4.orig/scripts/build-slackware-live.sh slackware-live-0.4/scripts/build-slackware-live.sh
 --- slackware-live-0.4.orig/scripts/build-slackware-live.sh	2014-02-11 22:32:24.000000000 +0200
-+++ slackware-live-0.4/scripts/build-slackware-live.sh	2014-09-16 20:34:31.076603216 +0300
++++ slackware-live-0.4/scripts/build-slackware-live.sh	2014-09-16 23:07:54.566540593 +0300
 @@ -57,9 +57,9 @@
  	umount $rootdirectory/proc
  	rm -f $rootdirectory/tmp/initrd.gz
@@ -214,7 +214,7 @@ diff -Naur slackware-live-0.4.orig/scripts/build-slackware-live.sh slackware-liv
 +     fi
 +    fi
 +    
-+    if [ "$SLACK_KERNEL" == "vmlinuz-nonpae" ]; then   
++    if [ "$SLACK_KERNEL" == "vmlinuznp" ]; then   
 +     if [ -r vmlinuz-huge-$VERSION ]; then
 +      ln -sf vmlinuz-huge-$VERSION vmlinuz
 +      ln -sf config-huge-$VERSION config
@@ -222,9 +222,9 @@ diff -Naur slackware-live-0.4.orig/scripts/build-slackware-live.sh slackware-liv
 +     fi
 +    fi
 +    
-+    if [ "$SLACK_INITRD" == "initrd-nonpae" ]; then 
-+     cp initrd.gz initrd-pae.gz
-+     cp initrd-nonpae.gz initrd.gz
++    if [ "$SLACK_INITRD" == "nosmp.gz" ]; then 
++     cp initrd.gz smp.gz
++     cp nosmp.gz initrd.gz
 +    fi 
 +    )
 +
