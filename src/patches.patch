@@ -1,6 +1,6 @@
 diff -Naur slackware-live-0.4.orig/scripts/build-slackware-live.sh slackware-live-0.4/scripts/build-slackware-live.sh
 --- slackware-live-0.4.orig/scripts/build-slackware-live.sh	2014-02-11 22:32:24.000000000 +0200
-+++ slackware-live-0.4/scripts/build-slackware-live.sh	2015-02-17 15:11:38.893241232 +0200
++++ slackware-live-0.4/scripts/build-slackware-live.sh	2015-02-22 18:57:07.541223695 +0200
 @@ -1,5 +1,7 @@
  #!/bin/sh
  
@@ -261,7 +261,7 @@ diff -Naur slackware-live-0.4.orig/scripts/build-slackware-live.sh slackware-liv
  	fi
  	if [ -f /etc/X11/xorg.conf ]; then
  		cp -f /etc/X11/xorg.conf /mnt/install/etc/X11/
-@@ -411,7 +466,7 @@
+@@ -411,23 +466,67 @@
  		cp -f /etc/hardwareclock /mnt/install/etc/
  	fi
  	#Copy end
@@ -270,7 +270,8 @@ diff -Naur slackware-live-0.4.orig/scripts/build-slackware-live.sh slackware-liv
  	#FSTab begin
  	cat > /mnt/install/etc/fstab << EOF
  proc /proc proc defaults 0 0
-@@ -419,15 +474,58 @@
+ sysfs /sys sysfs defaults 0 0
++tmpfs /dev/shm tmpfs defaults 0 0
  $systempart / $SYSINSTALLFS defaults 1 1
  EOF
  	cat /etc/fstab | grep " swap " >> /mnt/install/etc/fstab
@@ -333,7 +334,7 @@ diff -Naur slackware-live-0.4.orig/scripts/build-slackware-live.sh slackware-liv
  		kv=`basename /mnt/install/lib/modules/*`
  		if lsmod | grep -q $SYSINSTALLFS; then
  			moduleslist="$SYSINSTALLFS"
-@@ -453,6 +551,7 @@
+@@ -453,6 +552,7 @@
  	#InitRD end
  	
  	#LiLo begin
@@ -341,7 +342,7 @@ diff -Naur slackware-live-0.4.orig/scripts/build-slackware-live.sh slackware-liv
  	if [ "$loadersetup" == "-auto" ]; then
  		installdevice=`echo $systempart | cut -c1-8`
  		if [ -d /sys/firmware/efi ]; then #UEFI
-@@ -462,7 +561,7 @@
+@@ -462,7 +562,7 @@
  			if [ ! -z "$efipartition" ]; then
  				mkdir -p /mnt/efi
  				mount $efipartition /mnt/efi
@@ -350,7 +351,7 @@ diff -Naur slackware-live-0.4.orig/scripts/build-slackware-live.sh slackware-liv
  				if [ -d /mnt/efi/EFI/$efilabel ]; then
  					conflictpart=`cat /mnt/efi/EFI/$efilabel/elilo.conf | grep "append" | sed 's/.*root=\([^ ]*\).*/\1/'`
  					if [ "$conflictpart" == "$systempart" ]
-@@ -476,10 +575,10 @@
+@@ -476,10 +576,10 @@
  				cp /mnt/install/boot/vmlinuz /mnt/efi/EFI/$efilabel/
  				cat > /mnt/efi/EFI/$efilabel/elilo.conf << EOF
  timeout=1
@@ -363,7 +364,7 @@ diff -Naur slackware-live-0.4.orig/scripts/build-slackware-live.sh slackware-liv
      append="root=$systempart ro"
  	read-only
  EOF
-@@ -489,14 +588,14 @@
+@@ -489,14 +589,14 @@
  				fi
  				umount /mnt/efi
  				rmdir /mnt/efi
@@ -381,7 +382,7 @@ diff -Naur slackware-live-0.4.orig/scripts/build-slackware-live.sh slackware-liv
  bmp-colors = 255,0,255,0,255,0
  bmp-table = 60,6,1,16
  bmp-timer = 65,27,0,255
-@@ -514,7 +613,7 @@
+@@ -514,7 +614,7 @@
  
  image = /boot/vmlinuz
  root = $systempart
@@ -390,7 +391,7 @@ diff -Naur slackware-live-0.4.orig/scripts/build-slackware-live.sh slackware-liv
  read-only
  EOF
  			if [ -f /mnt/install/boot/initrd.gz ]; then
-@@ -535,6 +634,163 @@
+@@ -535,6 +635,163 @@
  		fi
  	fi
  	#LiLo end
@@ -554,7 +555,7 @@ diff -Naur slackware-live-0.4.orig/scripts/build-slackware-live.sh slackware-liv
  	
  	umount /mnt/install
  	rmdir /mnt/install
-@@ -730,6 +986,11 @@
+@@ -730,6 +987,11 @@
  	rootdirectory=$2
  	systempart=$3
  	loadersetup=$4
@@ -566,7 +567,7 @@ diff -Naur slackware-live-0.4.orig/scripts/build-slackware-live.sh slackware-liv
  	if [ -d "$rootdirectory" ] && [ -b "$systempart" ]; then
  		systemsize=`du -s -m $rootdirectory | sed 's/\t.*//'`
  		device=`echo $systempart | cut -c6-8`
-@@ -741,11 +1002,11 @@
+@@ -741,11 +1003,11 @@
  			echo "error: insufficant space on device '$systempart'"
  			exit $INSUFFICIENTSPACE
  		else
