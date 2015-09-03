@@ -1,6 +1,6 @@
-diff -Naur slackware-live-0.4.orig/scripts/build-slackware-live.sh slackware-live-0.4/scripts/build-slackware-live.sh
---- slackware-live-0.4.orig/scripts/build-slackware-live.sh	2014-02-11 22:32:24.000000000 +0200
-+++ slackware-live-0.4/scripts/build-slackware-live.sh	2015-03-30 18:28:54.715276971 +0300
+diff -Naur slackware-live-0.4-orig/scripts/build-slackware-live.sh slackware-live-0.4/scripts/build-slackware-live.sh
+--- slackware-live-0.4-orig/scripts/build-slackware-live.sh	2014-02-11 22:32:24.000000000 +0200
++++ slackware-live-0.4/scripts/build-slackware-live.sh	2015-09-01 18:34:58.707462218 +0300
 @@ -1,11 +1,18 @@
  #!/bin/sh
  
@@ -210,8 +210,8 @@ diff -Naur slackware-live-0.4.orig/scripts/build-slackware-live.sh slackware-liv
 +	username=$5
 +	userpassword=$6
 +	installation_mode=$7
-+	home_dir=$8
-+	bootloader=$9
++	bootloader=$8
++	home_dir=$9
  	
 -	mkfs.$SYSINSTALLFS $systempart || return $FORMATERROR
 +	SYSINSTALLFS="ext4" # set default filesystem of root
@@ -660,8 +660,8 @@ diff -Naur slackware-live-0.4.orig/scripts/build-slackware-live.sh slackware-liv
 +	username=$6
 +	userpassword=$7
 +	installation_mode=$8
-+	home_dir=$9
-+	bootloader=${10}
++	bootloader=$9
++	home_dir=${10}
 +	
  	if [ -d "$rootdirectory" ] && [ -b "$systempart" ]; then
  		systemsize=`du -s -m $rootdirectory | sed 's/\t.*//'`
@@ -671,7 +671,7 @@ diff -Naur slackware-live-0.4.orig/scripts/build-slackware-live.sh slackware-liv
  			exit $INSUFFICIENTSPACE
  		else
 -			install_system $rootdirectory $systempart $loadersetup
-+			install_system $rootdirectory $systempart $loadersetup $rootpassword $username $userpassword $installation_mode $home_dir $bootloader
++			install_system $rootdirectory $systempart $loadersetup $rootpassword $username $userpassword $installation_mode $bootloader $home_dir
  			exit $!
  		fi
  	else
@@ -689,9 +689,9 @@ diff -Naur slackware-live-0.4.orig/scripts/build-slackware-live.sh slackware-liv
  	echo "`basename $0` --share live_dir listen_interface ip_range [modules_list|auto]"
  	echo "`basename $0` --unshare"
  	exit $CMDERROR
-diff -Naur slackware-live-0.4.orig/scripts/init slackware-live-0.4/scripts/init
---- slackware-live-0.4.orig/scripts/init	2014-02-07 11:04:23.000000000 +0200
-+++ slackware-live-0.4/scripts/init	2015-02-17 15:16:20.486809000 +0200
+diff -Naur slackware-live-0.4-orig/scripts/init slackware-live-0.4/scripts/init
+--- slackware-live-0.4-orig/scripts/init	2014-02-07 11:04:23.000000000 +0200
++++ slackware-live-0.4/scripts/init	2015-09-01 18:33:15.932400732 +0300
 @@ -1,5 +1,8 @@
  #!/bin/ash
  
