@@ -1,4 +1,6 @@
-2014-05-04: Dimitris Tzemos (djemos@slackel.gr) corrections for slackel, salix.
+2015-10-11:	Slackware-Live-0.4.5:
+	+ add support to format partitions using different filesystems (btrfs,ext2,ext3,ext4,reiserfs,jfs,xfs) by [Dimitris Tzemos <djemos@slackel.gr>]
+2014-05-04: Slackware-Live-0.4.4: Dimitris Tzemos (djemos@slackel.gr) corrections for slackel, salix.
     + add support for setting root password at installation on hard disk
 	+ add support for creation a new user and password and remove the liveuser
 	+ add support for setting the keyboard correctly at boot time for greek land other locales.
