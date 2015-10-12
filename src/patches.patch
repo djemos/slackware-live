@@ -1,6 +1,32 @@
-diff -Naur slackware-live-0.4-orig/scripts/build-slackware-live.sh slackware-live-0.4/scripts/build-slackware-live.sh
---- slackware-live-0.4-orig/scripts/build-slackware-live.sh	2014-02-11 22:32:24.000000000 +0200
-+++ slackware-live-0.4/scripts/build-slackware-live.sh	2015-09-01 18:34:58.707462218 +0300
+diff -Naur slackware-live-0.4.5.orig/doc/AUTHORS slackware-live-0.4.5/doc/AUTHORS
+--- slackware-live-0.4.5.orig/doc/AUTHORS	2010-07-20 18:29:52.000000000 +0300
++++ slackware-live-0.4.5/doc/AUTHORS	2015-10-11 20:05:34.167552182 +0300
+@@ -1,4 +1,5 @@
+ Developpers:
++- Dimitris Tzemos <djemos@slackel.g>
+ - Frank Endres <frankendres@tuxfamily.org>
+ - Sebastian Reisse <sebastian.j.reisse@gmx.net>
+ 
+diff -Naur slackware-live-0.4.5.orig/doc/ChangeLog slackware-live-0.4.5/doc/ChangeLog
+--- slackware-live-0.4.5.orig/doc/ChangeLog	2014-01-24 18:55:28.000000000 +0200
++++ slackware-live-0.4.5/doc/ChangeLog	2015-10-11 20:17:29.112747176 +0300
+@@ -1,3 +1,13 @@
++2015-10-11: Slackware-Live-0.4.5:
++	- added support to format partitions using different filesystems (btrfs,ext2,ext3,ext4,reiserfs,jfs,xfs) by [Dimitris Tzemos <djemos@slackel.gr>]
++2014-04-04: Slackware-Live-0.4.4: 
++	- added support for setting /home user directory on a different partition 
++	- added support for setting root password on installation system by [Dimitris Tzemos <djemos@slackel.gr>]
++	- added support for creating a user name and user password on installation system by [Dimitris Tzemos <djemos@slackel.gr>]
++	- added partition manager connectivity in gui by [Dimitris Tzemos <djemos@slackel.gr>]
++	- added support for core, basic, full mode installation by [Dimitris Tzemos <djemos@slackel.gr>]
++2015-01-15: Slackware-Live-0.4.3: fixed EFI installation
++	+ fixed fstab (added /dev/shm tmpfs, needed for Chromium Web browser for example)
+ 2014-01-24: Slackware-Live-0.4: add support for UEFI & GPT
+ 	+ add tz (timezone) & hwc (hardwareclock) boot options
+ 	+ support persistent home and changes on partition (fixed disk or usb)
+diff -Naur slackware-live-0.4.5.orig/scripts/build-slackware-live.sh slackware-live-0.4.5/scripts/build-slackware-live.sh
+--- slackware-live-0.4.5.orig/scripts/build-slackware-live.sh	2014-02-11 22:32:24.000000000 +0200
++++ slackware-live-0.4.5/scripts/build-slackware-live.sh	2015-10-12 02:36:09.124155634 +0300
 @@ -1,11 +1,18 @@
  #!/bin/sh
  
@@ -201,7 +227,7 @@ diff -Naur slackware-live-0.4-orig/scripts/build-slackware-live.sh slackware-liv
  	
  	mkdir -p /mnt/install
  	mount $installmedia /mnt/install
-@@ -374,21 +400,78 @@
+@@ -374,21 +400,108 @@
  	rootdirectory=$1
  	systempart=$2
  	loadersetup=$3
@@ -211,34 +237,64 @@ diff -Naur slackware-live-0.4-orig/scripts/build-slackware-live.sh slackware-liv
 +	userpassword=$6
 +	installation_mode=$7
 +	bootloader=$8
-+	home_dir=$9
++	format_home=$9
++	SYSINSTALLFS=${10}
++	home_dir=${11}
++	
++	#SYSINSTALLFS="ext4" # set default filesystem of root
++	if [ "$SYSINSTALLFS" == "" ]; then
++	 SYSINSTALLFS="ext4" # set default filesystem of root
++	fi
  	
 -	mkfs.$SYSINSTALLFS $systempart || return $FORMATERROR
-+	SYSINSTALLFS="ext4" # set default filesystem of root
  
  	mkdir -p /mnt/install
 -	mount $systempart /mnt/install
 +		
-+	if mount $systempart /mnt/install 2>/dev/null; then  # if there is a filesystem find it
-+		fs=`mount | grep "$systempart" | cut -f5 -d' '`
-+		if echo $fs | grep -q "ext" || echo $fs | grep -q "brtfs" || echo $fs | grep -q "reiser"|| echo $fs | grep -q "xfs"; then
-+			SYSINSTALLFS=$fs  # find filesystem type
-+		fi
++	#if mount $systempart /mnt/install 2>/dev/null; then  # if there is a filesystem find it
++	#	fs=`mount | grep "$systempart" | cut -f5 -d' '`
++	#	if echo $fs | grep -q "ext" || echo $fs | grep -q "btrfs" || echo $fs | grep -q "reiserfs"|| echo $fs | grep -q "jfs"|| echo $fs | grep -q "xfs"; then
++	#		SYSINSTALLFS=$fs  # find filesystem type
++	#	fi
 +		umount /mnt/install	
++	#fi
++	
++	fs=$SYSINSTALLFS
++	
++	if [ "$fs" = "ext2" ]; then
++	   flag=" -F "
++	elif [ "$fs" = "ext3" ]; then
++	   flag=" -F "
++	elif [ "$fs" = "ext4" ]; then
++	   flag=" -F "     
++	elif [ "$fs" = "btrfs" ]; then
++	   flag="-f -d single -m single"
++	elif [ "$fs" = "jfs" ]; then
++	   flag=" -c -q " 
++	elif [ "$fs" = "reiserfs" ]; then
++	   flag=" -f "
++	elif [ "$fs" = "xfs" ]; then
++	   flag=" -f -q "   
 +	fi
-+	mkfs.$SYSINSTALLFS $systempart || return $FORMATERROR  # format partition
++	 
++	mkfs.$SYSINSTALLFS $flag $systempart || return $FORMATERROR  # format partition
  
 +	mount $systempart /mnt/install
 +    
 +    #handles home partition
 +	if [ "$home_dir" != "" ] && [ "$home_dir" != "$systempart" ]; then
 +		mkdir -p /mnt/install/home
-+		if ! mount $home_dir /mnt/install/home 2>/dev/null; then
-+			mkfs.$SYSINSTALLFS $home_dir
-+			mount $home_dir /mnt/install/home
++		if [ "$format_home" = "yes" ]; then
++			mkfs.$SYSINSTALLFS $flag $home_dir
 +		fi
++		mount $home_dir /mnt/install/home
++			
++	#	if ! mount $home_dir /mnt/install/home 2>/dev/null; then
++	#		mkfs.$SYSINSTALLFS $flag $home_dir
++	#		mount $home_dir /mnt/install/home
++	#	fi
 +		#fs=`mount | grep "$home_dir" | cut -f5 -d' '`
-+		#if echo $fs | grep -q "ext" || echo $fs | grep -q "brtfs" || echo $fs | grep -q "reiser"|| echo $fs | grep -q "xfs"; then
++		#if echo $fs | grep -q "ext" || echo $fs | grep -q "btrfs" || echo $fs | grep -q "reiserfs"|| echo $fs | grep -q "jfs"|| echo $fs | grep -q "xfs"; then
 +		#	echo "$home_dir /home $fs defaults 1 1" >> /mnt/install/etc/fstab
 +		#fi
 +    fi
@@ -287,7 +343,7 @@ diff -Naur slackware-live-0.4-orig/scripts/build-slackware-live.sh slackware-liv
  
  	sed -i /^root:/d /mnt/install/etc/shadow #setup root password
  	cat /etc/shadow | sed -n /^root:/p >> /mnt/install/etc/shadow
-@@ -397,8 +480,8 @@
+@@ -397,8 +510,8 @@
  		cp -f /etc/rc.d/rc.keymap /mnt/install/etc/rc.d/
  	fi
  	cp -f /etc/profile.d/lang.sh /mnt/install/etc/profile.d/
@@ -298,7 +354,7 @@ diff -Naur slackware-live-0.4-orig/scripts/build-slackware-live.sh slackware-liv
  	fi
  	if [ -f /etc/X11/xorg.conf ]; then
  		cp -f /etc/X11/xorg.conf /mnt/install/etc/X11/
-@@ -411,23 +494,75 @@
+@@ -411,23 +524,75 @@
  		cp -f /etc/hardwareclock /mnt/install/etc/
  	fi
  	#Copy end
@@ -314,7 +370,7 @@ diff -Naur slackware-live-0.4-orig/scripts/build-slackware-live.sh slackware-liv
 +
 +	if [ "$home_dir" != "" ] && [ "$home_dir" != "$systempart" ]; then
 +		fs=`mount | grep "$home_dir" | cut -f5 -d' '`
-+		if echo $fs | grep -q "ext" || echo $fs | grep -q "brtfs" || echo $fs | grep -q "reiser"|| echo $fs | grep -q "xfs"; then
++		if echo $fs | grep -q "ext" || echo $fs | grep -q "btrfs" || echo $fs | grep -q "reiserfs"|| echo $fs | grep -q "jfs"|| echo $fs | grep -q "xfs"; then
 +			echo "$home_dir /home $fs defaults 1 1" >> /mnt/install/etc/fstab
 +		fi
 +	fi
@@ -379,7 +435,7 @@ diff -Naur slackware-live-0.4-orig/scripts/build-slackware-live.sh slackware-liv
  		kv=`basename /mnt/install/lib/modules/*`
  		if lsmod | grep -q $SYSINSTALLFS; then
  			moduleslist="$SYSINSTALLFS"
-@@ -451,10 +586,11 @@
+@@ -451,10 +616,11 @@
  		fi
  	fi
  	#InitRD end
@@ -392,7 +448,7 @@ diff -Naur slackware-live-0.4-orig/scripts/build-slackware-live.sh slackware-liv
  		if [ -d /sys/firmware/efi ]; then #UEFI
  			modprobe efivars
  			efipartnum=`gdisk -l $installdevice | grep "EF00" | sed 's/  \+/ /g' | cut -f2 -d' '`
-@@ -462,7 +598,7 @@
+@@ -462,7 +628,7 @@
  			if [ ! -z "$efipartition" ]; then
  				mkdir -p /mnt/efi
  				mount $efipartition /mnt/efi
@@ -401,7 +457,7 @@ diff -Naur slackware-live-0.4-orig/scripts/build-slackware-live.sh slackware-liv
  				if [ -d /mnt/efi/EFI/$efilabel ]; then
  					conflictpart=`cat /mnt/efi/EFI/$efilabel/elilo.conf | grep "append" | sed 's/.*root=\([^ ]*\).*/\1/'`
  					if [ "$conflictpart" == "$systempart" ]
-@@ -476,10 +612,10 @@
+@@ -476,10 +642,10 @@
  				cp /mnt/install/boot/vmlinuz /mnt/efi/EFI/$efilabel/
  				cat > /mnt/efi/EFI/$efilabel/elilo.conf << EOF
  timeout=1
@@ -414,7 +470,7 @@ diff -Naur slackware-live-0.4-orig/scripts/build-slackware-live.sh slackware-liv
      append="root=$systempart ro"
  	read-only
  EOF
-@@ -489,14 +625,14 @@
+@@ -489,14 +655,14 @@
  				fi
  				umount /mnt/efi
  				rmdir /mnt/efi
@@ -432,7 +488,7 @@ diff -Naur slackware-live-0.4-orig/scripts/build-slackware-live.sh slackware-liv
  bmp-colors = 255,0,255,0,255,0
  bmp-table = 60,6,1,16
  bmp-timer = 65,27,0,255
-@@ -514,7 +650,7 @@
+@@ -514,7 +680,7 @@
  
  image = /boot/vmlinuz
  root = $systempart
@@ -441,7 +497,7 @@ diff -Naur slackware-live-0.4-orig/scripts/build-slackware-live.sh slackware-liv
  read-only
  EOF
  			if [ -f /mnt/install/boot/initrd.gz ]; then
-@@ -534,7 +670,209 @@
+@@ -534,7 +700,212 @@
  			chroot /mnt/install umount /proc
  		fi
  	fi
@@ -468,6 +524,9 @@ diff -Naur slackware-live-0.4-orig/scripts/build-slackware-live.sh slackware-liv
 +			fi
 +			grub-install --efi-directory /mnt/efi --boot-directory /mnt/install/boot/ --target=x86_64-efi 2>/dev/null && grubstatus=0
 +			umount /mnt/efi
++			# Add the EFI System Partition to /etc/fstab:
++			mkdir -p /mnt/install/boot/efi
++			echo "$efipartition /boot/efi vfat defaults 1 0 " >> /mnt/install/etc/fstab
 +		else #CSM
 +			if echo -e "print\nquit" | parted $installdevice | grep -q ": msdos$" || 
 +			gdisk -l $installdevice 2>/dev/null | grep -q " EF02 "; then
@@ -652,7 +711,7 @@ diff -Naur slackware-live-0.4-orig/scripts/build-slackware-live.sh slackware-liv
  	
  	umount /mnt/install
  	rmdir /mnt/install
-@@ -730,6 +1068,13 @@
+@@ -730,6 +1101,15 @@
  	rootdirectory=$2
  	systempart=$3
  	loadersetup=$4
@@ -661,17 +720,22 @@ diff -Naur slackware-live-0.4-orig/scripts/build-slackware-live.sh slackware-liv
 +	userpassword=$7
 +	installation_mode=$8
 +	bootloader=$9
-+	home_dir=${10}
++	format_home=${10}
++	SYSINSTALLFS=${11}
++	home_dir=${12}
 +	
  	if [ -d "$rootdirectory" ] && [ -b "$systempart" ]; then
  		systemsize=`du -s -m $rootdirectory | sed 's/\t.*//'`
  		device=`echo $systempart | cut -c6-8`
-@@ -741,11 +1086,11 @@
+@@ -741,11 +1121,14 @@
  			echo "error: insufficant space on device '$systempart'"
  			exit $INSUFFICIENTSPACE
  		else
 -			install_system $rootdirectory $systempart $loadersetup
-+			install_system $rootdirectory $systempart $loadersetup $rootpassword $username $userpassword $installation_mode $bootloader $home_dir
++		  if [ "$home_dir" == "" ]; then
++			SYSINSTALLFS="ext4"
++		  fi
++			install_system $rootdirectory $systempart $loadersetup $rootpassword $username $userpassword $installation_mode $bootloader $format_home $SYSINSTALLFS $home_dir
  			exit $!
  		fi
  	else
@@ -680,18 +744,18 @@ diff -Naur slackware-live-0.4-orig/scripts/build-slackware-live.sh slackware-liv
  		exit $CMDERROR
  	fi
  	;;
-@@ -780,7 +1125,7 @@
+@@ -780,7 +1163,7 @@
  	echo "`basename $0` --module root_dir live_dir module_file [-xz|-gzip] [-optional]"
  	echo "`basename $0` --iso live_dir iso_file"
  	echo "`basename $0` --usb live_dir device"
 -	echo "`basename $0` --install root_dir device [-auto|-expert]"
-+	echo "`basename $0` --install root_dir device [-auto|-expert] rootpassword username userpassword [core|basic|full] home_dir [grub|lilo]"
++	echo "`basename $0` --install root_dir device [-auto|-expert] rootpassword username userpassword [core|basic|full] format_home [yes|no] filesystem_type home_dir [grub|lilo]"
  	echo "`basename $0` --share live_dir listen_interface ip_range [modules_list|auto]"
  	echo "`basename $0` --unshare"
  	exit $CMDERROR
-diff -Naur slackware-live-0.4-orig/scripts/init slackware-live-0.4/scripts/init
---- slackware-live-0.4-orig/scripts/init	2014-02-07 11:04:23.000000000 +0200
-+++ slackware-live-0.4/scripts/init	2015-09-01 18:33:15.932400732 +0300
+diff -Naur slackware-live-0.4.5.orig/scripts/init slackware-live-0.4.5/scripts/init
+--- slackware-live-0.4.5.orig/scripts/init	2014-02-07 11:04:23.000000000 +0200
++++ slackware-live-0.4.5/scripts/init	2015-10-11 17:36:15.925391346 +0300
 @@ -1,5 +1,8 @@
  #!/bin/ash
  
