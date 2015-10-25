@@ -1,32 +1,32 @@
 diff -Naur slackware-live-0.4.5.orig/doc/AUTHORS slackware-live-0.4.5/doc/AUTHORS
 --- slackware-live-0.4.5.orig/doc/AUTHORS	2010-07-20 18:29:52.000000000 +0300
-+++ slackware-live-0.4.5/doc/AUTHORS	2015-10-11 20:05:34.167552182 +0300
++++ slackware-live-0.4.5/doc/AUTHORS	2015-10-15 22:55:54.483375796 +0300
 @@ -1,4 +1,5 @@
  Developpers:
-+- Dimitris Tzemos <djemos@slackel.g>
++- Dimitris Tzemos <djemos@slackel.gr>
  - Frank Endres <frankendres@tuxfamily.org>
  - Sebastian Reisse <sebastian.j.reisse@gmx.net>
  
 diff -Naur slackware-live-0.4.5.orig/doc/ChangeLog slackware-live-0.4.5/doc/ChangeLog
 --- slackware-live-0.4.5.orig/doc/ChangeLog	2014-01-24 18:55:28.000000000 +0200
-+++ slackware-live-0.4.5/doc/ChangeLog	2015-10-11 20:17:29.112747176 +0300
++++ slackware-live-0.4.5/doc/ChangeLog	2015-10-15 22:55:09.747866081 +0300
 @@ -1,3 +1,13 @@
 +2015-10-11: Slackware-Live-0.4.5:
 +	- added support to format partitions using different filesystems (btrfs,ext2,ext3,ext4,reiserfs,jfs,xfs) by [Dimitris Tzemos <djemos@slackel.gr>]
++2015-01-15: Slackware-Live-0.4.3: fixed EFI installation
++	+ fixed fstab (added /dev/shm tmpfs, needed for Chromium Web browser for example)
 +2014-04-04: Slackware-Live-0.4.4: 
 +	- added support for setting /home user directory on a different partition 
 +	- added support for setting root password on installation system by [Dimitris Tzemos <djemos@slackel.gr>]
 +	- added support for creating a user name and user password on installation system by [Dimitris Tzemos <djemos@slackel.gr>]
 +	- added partition manager connectivity in gui by [Dimitris Tzemos <djemos@slackel.gr>]
 +	- added support for core, basic, full mode installation by [Dimitris Tzemos <djemos@slackel.gr>]
-+2015-01-15: Slackware-Live-0.4.3: fixed EFI installation
-+	+ fixed fstab (added /dev/shm tmpfs, needed for Chromium Web browser for example)
  2014-01-24: Slackware-Live-0.4: add support for UEFI & GPT
  	+ add tz (timezone) & hwc (hardwareclock) boot options
  	+ support persistent home and changes on partition (fixed disk or usb)
 diff -Naur slackware-live-0.4.5.orig/scripts/build-slackware-live.sh slackware-live-0.4.5/scripts/build-slackware-live.sh
 --- slackware-live-0.4.5.orig/scripts/build-slackware-live.sh	2014-02-11 22:32:24.000000000 +0200
-+++ slackware-live-0.4.5/scripts/build-slackware-live.sh	2015-10-12 02:36:09.124155634 +0300
++++ slackware-live-0.4.5/scripts/build-slackware-live.sh	2015-10-25 16:41:18.477537953 +0200
 @@ -1,11 +1,18 @@
  #!/bin/sh
  
@@ -169,7 +169,15 @@ diff -Naur slackware-live-0.4.5.orig/scripts/build-slackware-live.sh slackware-l
  		fi
  		sleep 3
  	
-@@ -310,7 +336,7 @@
+@@ -303,14 +329,14 @@
+ 			umount /mnt/tmp
+ 			fsck -fy $installmedia >/dev/null 2>&1
+ 		else #format partition
+-			if fdisk -l $installdevice 2>/dev/null | grep -q GPT; then
++			if fdisk -l $installdevice 2>/dev/null | grep -q 'GPT\|gpt' ; then
+ 				partitiontype=`gdisk -l $installdevice | grep "^  *$partitionnumber " | sed 's/  */:/g' | cut -f7 -d:`
+ 			else
+ 				partitiontype=`fdisk -l $installdevice 2>/dev/null | grep "^$installmedia " | sed -e 's/\*//' -e 's/  */:/g' | cut -f5 -d:`
  			fi
  			case $partitiontype in
  			83|8300) 
@@ -740,7 +748,7 @@ diff -Naur slackware-live-0.4.5.orig/scripts/build-slackware-live.sh slackware-l
  		fi
  	else
 -		echo "`basename $0` --install root_dir device [-auto|-expert]"
-+		echo "`basename $0` --install root_dir device [-auto|-expert] rootpassword username userpassword installation_mode"
++		echo "`basename $0` --install root_dir device [-auto|-expert] rootpassword username userpassword installation_mode bootloader format_home SYSINSTALLFS home_dir"
  		exit $CMDERROR
  	fi
  	;;
@@ -749,7 +757,7 @@ diff -Naur slackware-live-0.4.5.orig/scripts/build-slackware-live.sh slackware-l
  	echo "`basename $0` --iso live_dir iso_file"
  	echo "`basename $0` --usb live_dir device"
 -	echo "`basename $0` --install root_dir device [-auto|-expert]"
-+	echo "`basename $0` --install root_dir device [-auto|-expert] rootpassword username userpassword [core|basic|full] format_home [yes|no] filesystem_type home_dir [grub|lilo]"
++	echo "`basename $0` --install root_dir device [-auto|-expert] rootpassword username userpassword [core|basic|full] [grub|lilo] [yes|no] filesystem_type home_dir"
  	echo "`basename $0` --share live_dir listen_interface ip_range [modules_list|auto]"
  	echo "`basename $0` --unshare"
  	exit $CMDERROR
