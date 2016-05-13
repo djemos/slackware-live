@@ -26,7 +26,7 @@ diff -Naur slackware-live-0.4.5.orig/doc/ChangeLog slackware-live-0.4.5/doc/Chan
  	+ support persistent home and changes on partition (fixed disk or usb)
 diff -Naur slackware-live-0.4.5.orig/scripts/build-slackware-live.sh slackware-live-0.4.5/scripts/build-slackware-live.sh
 --- slackware-live-0.4.5.orig/scripts/build-slackware-live.sh	2014-02-11 22:32:24.000000000 +0200
-+++ slackware-live-0.4.5/scripts/build-slackware-live.sh	2015-10-25 16:41:18.477537953 +0200
++++ slackware-live-0.4.5/scripts/build-slackware-live.sh	2016-05-10 18:33:10.541760405 +0300
 @@ -1,11 +1,18 @@
  #!/bin/sh
  
@@ -132,7 +132,7 @@ diff -Naur slackware-live-0.4.5.orig/scripts/build-slackware-live.sh slackware-l
  		-b boot/syslinux/isolinux.bin -boot-load-size 4 -boot-info-table -no-emul-boot \
  		-c boot/syslinux/boot.catalog -hide boot.catalog -hide-joliet boot.catalog $altboot \
  	   $livedirectory
-@@ -273,13 +291,18 @@
+@@ -273,15 +291,20 @@
  
  	if [ "$installdevice" == "$installmedia" ]; then #install on whole disk: partition and format media
  		if [ `uname -m` == "x86_64" ]; then #EFI/GPT
@@ -152,15 +152,19 @@ diff -Naur slackware-live-0.4.5.orig/scripts/build-slackware-live.sh slackware-l
 +			fat32option="-F 32"
 +			mkfs.vfat $fat32option -n "$LIVELABEL" $installmedia || return $FORMATERROR
  		else #BIOS/MBR
- 			partitionnumber=4
+-			partitionnumber=4
++			partitionnumber=1
  			installmedia="$installdevice$partitionnumber"
-@@ -289,9 +312,12 @@
+ 			if (( $mediasize < 2048 ))
+ 			then heads=128; sectors=32
+@@ -289,9 +312,13 @@
  			fi
  			mkdiskimage $installdevice 1 $heads $sectors || return $PARTITIONERROR
  			dd if=/dev/zero of=$installdevice bs=1 seek=446 count=64 >/dev/null 2>&1
 -			echo -e ',0\n,0\n,0\n,,83,*' | sfdisk $installdevice || return $PARTITIONERROR
 +			#echo -e ',0\n,0\n,0\n,,83,*' | sfdisk $installdevice || return $PARTITIONERROR
-+			echo -e ',0\n,0\n,0\n,,b,*' | sfdisk $installdevice || return $PARTITIONERROR
++			#echo -e ',0\n,0\n,0\n,,b,*' | sfdisk $installdevice || return $PARTITIONERROR
++			echo -e ',,b,*' | sfdisk $installdevice || return $PARTITIONERROR
  			partprobe $installdevice; sleep 3
 -			mkfs.ext3 -L "Slackware-Live" $installmedia || return $FORMATERROR
 +			#mkfs.ext3 -L "$LIVELABEL" $installmedia || return $FORMATERROR
@@ -169,7 +173,7 @@ diff -Naur slackware-live-0.4.5.orig/scripts/build-slackware-live.sh slackware-l
  		fi
  		sleep 3
  	
-@@ -303,14 +329,14 @@
+@@ -303,14 +330,14 @@
  			umount /mnt/tmp
  			fsck -fy $installmedia >/dev/null 2>&1
  		else #format partition
@@ -186,7 +190,7 @@ diff -Naur slackware-live-0.4.5.orig/scripts/build-slackware-live.sh slackware-l
  				;;
  			*)
  				partition=`echo $installmedia | cut -c6-`
-@@ -319,30 +345,30 @@
+@@ -319,30 +346,30 @@
  				if (( $size > 1024 )); then
  					fat32option="-F 32"
  				fi
@@ -235,7 +239,7 @@ diff -Naur slackware-live-0.4.5.orig/scripts/build-slackware-live.sh slackware-l
  	
  	mkdir -p /mnt/install
  	mount $installmedia /mnt/install
-@@ -374,21 +400,108 @@
+@@ -374,21 +401,108 @@
  	rootdirectory=$1
  	systempart=$2
  	loadersetup=$3
@@ -351,7 +355,7 @@ diff -Naur slackware-live-0.4.5.orig/scripts/build-slackware-live.sh slackware-l
  
  	sed -i /^root:/d /mnt/install/etc/shadow #setup root password
  	cat /etc/shadow | sed -n /^root:/p >> /mnt/install/etc/shadow
-@@ -397,8 +510,8 @@
+@@ -397,8 +511,8 @@
  		cp -f /etc/rc.d/rc.keymap /mnt/install/etc/rc.d/
  	fi
  	cp -f /etc/profile.d/lang.sh /mnt/install/etc/profile.d/
@@ -362,7 +366,7 @@ diff -Naur slackware-live-0.4.5.orig/scripts/build-slackware-live.sh slackware-l
  	fi
  	if [ -f /etc/X11/xorg.conf ]; then
  		cp -f /etc/X11/xorg.conf /mnt/install/etc/X11/
-@@ -411,23 +524,75 @@
+@@ -411,23 +525,82 @@
  		cp -f /etc/hardwareclock /mnt/install/etc/
  	fi
  	#Copy end
@@ -375,6 +379,11 @@ diff -Naur slackware-live-0.4.5.orig/scripts/build-slackware-live.sh slackware-l
 +tmpfs /dev/shm tmpfs defaults 0 0
  $systempart / $SYSINSTALLFS defaults 1 1
  EOF
+-	cat /etc/fstab | grep " swap " >> /mnt/install/etc/fstab
+-	cat /etc/fstab | grep "/mnt" |  grep -v "$systempart" >> /mnt/install/etc/fstab
+-	cat /etc/fstab | grep "/mnt" |  grep -v "$systempart" | cut -f2 -d' ' | while read mountpoint; do
+-		mkdir /mnt/install$mountpoint
+-	done
 +
 +	if [ "$home_dir" != "" ] && [ "$home_dir" != "$systempart" ]; then
 +		fs=`mount | grep "$home_dir" | cut -f5 -d' '`
@@ -383,11 +392,14 @@ diff -Naur slackware-live-0.4.5.orig/scripts/build-slackware-live.sh slackware-l
 +		fi
 +	fi
 +	
- 	cat /etc/fstab | grep " swap " >> /mnt/install/etc/fstab
--	cat /etc/fstab | grep "/mnt" |  grep -v "$systempart" >> /mnt/install/etc/fstab
--	cat /etc/fstab | grep "/mnt" |  grep -v "$systempart" | cut -f2 -d' ' | while read mountpoint; do
--		mkdir /mnt/install$mountpoint
--	done
++	# Use any available swap device:
++    for SWAPD in $(blkid |grep TYPE="\"swap\"" |cut -d: -f1) ; do
++      echo "Enabling swapping to '$SWAPD'"
++      echo "$SWAPD  swap  swap defaults  0  0" >> /mnt/install/etc/fstab
++    done
++	
++	#cat /etc/fstab | grep " swap " >> /mnt/install/etc/fstab
++	
 +	#cat /etc/fstab | grep "/mnt" |  grep -v "$systempart" >> /mnt/install/etc/fstab
 +	#cat /etc/fstab | grep "/mnt" |  grep -v "$systempart" | cut -f2 -d' ' | while read mountpoint; do
 +	#	mkdir /mnt/install$mountpoint
@@ -443,7 +455,7 @@ diff -Naur slackware-live-0.4.5.orig/scripts/build-slackware-live.sh slackware-l
  		kv=`basename /mnt/install/lib/modules/*`
  		if lsmod | grep -q $SYSINSTALLFS; then
  			moduleslist="$SYSINSTALLFS"
-@@ -451,10 +616,11 @@
+@@ -451,10 +624,11 @@
  		fi
  	fi
  	#InitRD end
@@ -456,7 +468,7 @@ diff -Naur slackware-live-0.4.5.orig/scripts/build-slackware-live.sh slackware-l
  		if [ -d /sys/firmware/efi ]; then #UEFI
  			modprobe efivars
  			efipartnum=`gdisk -l $installdevice | grep "EF00" | sed 's/  \+/ /g' | cut -f2 -d' '`
-@@ -462,7 +628,7 @@
+@@ -462,7 +636,7 @@
  			if [ ! -z "$efipartition" ]; then
  				mkdir -p /mnt/efi
  				mount $efipartition /mnt/efi
@@ -465,7 +477,7 @@ diff -Naur slackware-live-0.4.5.orig/scripts/build-slackware-live.sh slackware-l
  				if [ -d /mnt/efi/EFI/$efilabel ]; then
  					conflictpart=`cat /mnt/efi/EFI/$efilabel/elilo.conf | grep "append" | sed 's/.*root=\([^ ]*\).*/\1/'`
  					if [ "$conflictpart" == "$systempart" ]
-@@ -476,10 +642,10 @@
+@@ -476,10 +650,10 @@
  				cp /mnt/install/boot/vmlinuz /mnt/efi/EFI/$efilabel/
  				cat > /mnt/efi/EFI/$efilabel/elilo.conf << EOF
  timeout=1
@@ -478,7 +490,7 @@ diff -Naur slackware-live-0.4.5.orig/scripts/build-slackware-live.sh slackware-l
      append="root=$systempart ro"
  	read-only
  EOF
-@@ -489,14 +655,14 @@
+@@ -489,14 +663,14 @@
  				fi
  				umount /mnt/efi
  				rmdir /mnt/efi
@@ -496,7 +508,7 @@ diff -Naur slackware-live-0.4.5.orig/scripts/build-slackware-live.sh slackware-l
  bmp-colors = 255,0,255,0,255,0
  bmp-table = 60,6,1,16
  bmp-timer = 65,27,0,255
-@@ -514,7 +680,7 @@
+@@ -514,7 +688,7 @@
  
  image = /boot/vmlinuz
  root = $systempart
@@ -505,7 +517,7 @@ diff -Naur slackware-live-0.4.5.orig/scripts/build-slackware-live.sh slackware-l
  read-only
  EOF
  			if [ -f /mnt/install/boot/initrd.gz ]; then
-@@ -534,7 +700,212 @@
+@@ -534,7 +708,214 @@
  			chroot /mnt/install umount /proc
  		fi
  	fi
@@ -566,7 +578,7 @@ diff -Naur slackware-live-0.4.5.orig/scripts/build-slackware-live.sh slackware-l
 +	if [ "$username" != "" ]; then 
 +		echo "Creating user $username with password $userpassword"
 +		chroot /mnt/install mount /proc
-+		chroot /mnt/install /usr/sbin/useradd -s /bin/bash -g users -m -k /etc/skel -G lp,floppy,audio,video,cdrom,plugdev,power,netdev,scanner,wheel "$username"
++		chroot /mnt/install /usr/sbin/useradd -s /bin/bash -g users -m -k /etc/skel -G lp,floppy,audio,video,cdrom,plugdev,polkitd,power,netdev,scanner,wheel "$username"
 +		chroot /mnt/install umount /proc
 +	fi
 +	
@@ -591,6 +603,8 @@ diff -Naur slackware-live-0.4.5.orig/scripts/build-slackware-live.sh slackware-l
 +	  sed -i "s/AllowNullPasswd=.*/AllowNullPasswd=/g" /mnt/install/etc/kde/kdm/kdmrc
 +	  sed -i "s/AutoLoginEnable=.*/AutoLoginEnable=/g" /mnt/install/etc/kde/kdm/kdmrc
 +	  sed -i "s/AutoLoginUser=.*/AutoLoginUser=/g" /mnt/install/etc/kde/kdm/kdmrc
++	  locale_noutf8=`cat /etc/kde/kdm/kdmrc | grep Language= | sed 's/\Language=//'`
++	  sed -i "s/\(^\|^#\)Language=.*/Language=$locale_noutf8/" /mnt/install/etc/kde/kdm/kdmrc
 +	fi
 +
 +	
@@ -719,7 +733,7 @@ diff -Naur slackware-live-0.4.5.orig/scripts/build-slackware-live.sh slackware-l
  	
  	umount /mnt/install
  	rmdir /mnt/install
-@@ -730,6 +1101,15 @@
+@@ -730,6 +1111,15 @@
  	rootdirectory=$2
  	systempart=$3
  	loadersetup=$4
@@ -735,7 +749,7 @@ diff -Naur slackware-live-0.4.5.orig/scripts/build-slackware-live.sh slackware-l
  	if [ -d "$rootdirectory" ] && [ -b "$systempart" ]; then
  		systemsize=`du -s -m $rootdirectory | sed 's/\t.*//'`
  		device=`echo $systempart | cut -c6-8`
-@@ -741,11 +1121,14 @@
+@@ -741,11 +1131,14 @@
  			echo "error: insufficant space on device '$systempart'"
  			exit $INSUFFICIENTSPACE
  		else
@@ -752,7 +766,7 @@ diff -Naur slackware-live-0.4.5.orig/scripts/build-slackware-live.sh slackware-l
  		exit $CMDERROR
  	fi
  	;;
-@@ -780,7 +1163,7 @@
+@@ -780,7 +1173,7 @@
  	echo "`basename $0` --module root_dir live_dir module_file [-xz|-gzip] [-optional]"
  	echo "`basename $0` --iso live_dir iso_file"
  	echo "`basename $0` --usb live_dir device"
@@ -763,7 +777,7 @@ diff -Naur slackware-live-0.4.5.orig/scripts/build-slackware-live.sh slackware-l
  	exit $CMDERROR
 diff -Naur slackware-live-0.4.5.orig/scripts/init slackware-live-0.4.5/scripts/init
 --- slackware-live-0.4.5.orig/scripts/init	2014-02-07 11:04:23.000000000 +0200
-+++ slackware-live-0.4.5/scripts/init	2015-10-11 17:36:15.925391346 +0300
++++ slackware-live-0.4.5/scripts/init	2016-05-13 19:58:25.769562129 +0300
 @@ -1,5 +1,8 @@
  #!/bin/ash
  
@@ -849,7 +863,15 @@ diff -Naur slackware-live-0.4.5.orig/scripts/init slackware-live-0.4.5/scripts/i
  		fi
  		if [ -d /slroot/live/media/$changes ] || [ -f /slroot/live/media/$changes ] || [ -b $changes ]; then
  			echo "Using persistent system storage ($changes)"
-@@ -262,25 +275,25 @@
+@@ -186,6 +199,7 @@
+ cat > /slroot/live/union/etc/fstab << END
+ proc /proc proc defaults 0 0
+ sysfs /sys sysfs defaults 0 0
++tmpfs /dev/shm tmpfs defaults 0 0
+ none / tmpfs defaults 0 0
+ END
+ 
+@@ -262,25 +276,25 @@
  			home=`echo "$home" | cut -f1 -d=`
  		fi
  		if [ ! -d /slroot/live/media/$home ] && [ ! -f /slroot/live/media/$home ] && [ ! -b $home ]; then #storage space creation
@@ -890,7 +912,7 @@ diff -Naur slackware-live-0.4.5.orig/scripts/init slackware-live-0.4.5/scripts/i
  		fi
  		if [ -d /slroot/live/media/$home ] || [ -f /slroot/live/media/$home ] || [ -b $home ]; then
  			echo "Setting up persistent home directory ($home)"
-@@ -308,7 +321,7 @@
+@@ -308,7 +322,7 @@
  #autologin
  runlevel=`cat /slroot/live/union/etc/inittab | sed -n /^id:[1-5]:initdefault:$/p | cut -f2 -d:`
  if [ $runlevel == 5 ]; then
@@ -899,23 +921,29 @@ diff -Naur slackware-live-0.4.5.orig/scripts/init slackware-live-0.4.5/scripts/i
  	
  	if [ -x /slroot/live/union/usr/bin/startx ]; then
  		cat  > /slroot/live/union/etc/profile.d/x.sh << END
-@@ -328,30 +341,59 @@
+@@ -328,30 +342,65 @@
  	then sed -i s/^export\ LANG=.*/export\ LANG=$locale/ /slroot/live/union/etc/profile.d/lang.sh
  	else echo "export LANG=$locale" >> /slroot/live/union/etc/profile.d/lang.sh
  	fi
 +	if [ -f /slroot/live/union/etc/kde/kdm/kdmrc ]; then
-+      locale_noutf8=$(echo $lang | sed 's/\.utf8//')
++      locale_noutf8=$(echo $locale | sed 's/\.utf8//')
 +      sed -i "s/\(^\|^#\)Language=.*/Language=$locale_noutf8/" /slroot/live/union/etc/kde/kdm/kdmrc
 +    fi    
 +    # Make firefox match OS locale
 +  # Now included in $DISTRONAME version, but keep it for other Slackware version or distro
-+  if [ -w /slroot/live/union/usr/lib$LIBSUFFIX/firefox/greprefs/all.js ]; then
-+    sed -i -e 's/pref("intl.locale.matchOS", false);/pref("intl.locale.matchOS", true);/g' /slroot/live/union/usr/lib$LIBSUFFIX/firefox/greprefs/all.js
++  #if [ -w /slroot/live/union/usr/lib$LIBSUFFIX/firefox/greprefs/all.js ]; then
++  # sed -i -e 's/pref("intl.locale.matchOS", false);/pref("intl.locale.matchOS", true);/g' /slroot/live/union/usr/lib$LIBSUFFIX/firefox/greprefs/all.js
++  #fi
++  if [ -w /slroot/live/union/usr/lib$LIBSUFFIX/firefox-*/defaults/pref/langpacks.js ]; then
++    sed -i -e 's/pref("intl.locale.matchOS", false);/pref("intl.locale.matchOS", true);/g' /slroot/live/union/usr/lib$LIBSUFFIX/firefox-*/defaults/pref/langpacks.js
 +  fi
 +  # Make thunderbird match OS locale
 +  # Now included in $DISTRONAME version, but keep it for other Slackware version or distro
-+  if [ -w /slroot/live/union/usr/lib$LIBSUFFIX/thunderbird/greprefs/all.js ]; then
-+    sed -i -e 's/pref("intl.locale.matchOS", false);/pref("intl.locale.matchOS", true);/g' /slroot/live/union/usr/lib$LIBSUFFIX/thunderbird/greprefs/all.js
++  #if [ -w /slroot/live/union/usr/lib$LIBSUFFIX/thunderbird/greprefs/all.js ]; then
++  #  sed -i -e 's/pref("intl.locale.matchOS", false);/pref("intl.locale.matchOS", true);/g' /slroot/live/union/usr/lib$LIBSUFFIX/thunderbird/greprefs/all.js
++  #fi
++  if [ -w /slroot/live/union/usr/lib$LIBSUFFIX/thunderbird-*/defaults/pref/langpacks.js ]; then
++    sed -i -e 's/pref("intl.locale.matchOS", false);/pref("intl.locale.matchOS", true);/g' /slroot/live/union/usr/lib$LIBSUFFIX/thunderbird-*/defaults/pref/langpacks.js
 +  fi
  fi
  
@@ -977,7 +1005,7 @@ diff -Naur slackware-live-0.4.5.orig/scripts/init slackware-live-0.4.5/scripts/i
  fi
  
  if [ ! -z "$tz" ]; then
-@@ -385,9 +427,9 @@
+@@ -385,9 +434,9 @@
  			else
  				echo "/dev/$partition none swap defaults,noauto 0 0" >> /slroot/live/union/etc/fstab
  			fi
