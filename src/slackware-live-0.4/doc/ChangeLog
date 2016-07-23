@@ -1,13 +1,13 @@
 2015-10-11: Slackware-Live-0.4.5:
-	- added support to format partitions using different filesystems (btrfs,ext2,ext3,ext4,reiserfs,jfs,xfs) by [Dimitris Tzemos <djemos@slackel.gr>]
+	+ added support to format partitions using different filesystems (btrfs,ext2,ext3,ext4,reiserfs,jfs,xfs) by [Dimitris Tzemos <dijemos@gmail.com>]
 2015-01-15: Slackware-Live-0.4.3: fixed EFI installation
 	+ fixed fstab (added /dev/shm tmpfs, needed for Chromium Web browser for example)
 2014-04-04: Slackware-Live-0.4.4: 
-	- added support for setting /home user directory on a different partition 
-	- added support for setting root password on installation system by [Dimitris Tzemos <djemos@slackel.gr>]
-	- added support for creating a user name and user password on installation system by [Dimitris Tzemos <djemos@slackel.gr>]
-	- added partition manager connectivity in gui by [Dimitris Tzemos <djemos@slackel.gr>]
-	- added support for core, basic, full mode installation by [Dimitris Tzemos <djemos@slackel.gr>]
+	+ added support for setting /home user directory on a different partition 
+	+ added support for setting root password on installation system by [Dimitris Tzemos <dijemos@gmail.com>]
+	+ added support for creating a user name and user password on installation system by [Dimitris Tzemos <dijemos@gmail.com>]
+	+ added partition manager connectivity in gui by [Dimitris Tzemos <dijemos@gmail.com>]
+	+ added support for core, basic, full mode installation by [Dimitris Tzemos <dijemos@gmail.com>]
 2014-01-24: Slackware-Live-0.4: add support for UEFI & GPT
 	+ add tz (timezone) & hwc (hardwareclock) boot options
 	+ support persistent home and changes on partition (fixed disk or usb)
