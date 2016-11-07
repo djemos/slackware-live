@@ -1,7 +1,7 @@
 Slackware Live is a live DVD/USB/NFS build and install tool written for Slackware (& Slackware64) Linux:
 - support GPT and legacy MBR partitionned disks, UEFI and CSM (legacy / BIOS) booting
 - contains all the necessary to convert an installed system to a live system and vice-versa;
-- it doesn't need any kernel recompile, but it support seamlessly AUFS and SquashFS-XZ/LZMA if your kernel support them;
+- it doesn't need any kernel recompile, (using overlayfs);
 - no changes are needed on the system to make live; the live system boots like an installed one (100% compatible with stock Slackware);
 - support persistent changes;
 - ...
@@ -13,3 +13,5 @@ This creates an initrd and a Slackel Live iso and also is used to install the li
 Can also install the live iso as a frugal installation to a usb to use persistence.
 
 All changes made for slackel are on patches.patch file
+
+The SLKBUILD source package can be found on http://www.slackel.gr/repo/source/slackel-source/slackware-live-0.5/0.5.1/
