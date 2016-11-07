@@ -1,3 +1,18 @@
+diff -Naur slackware-live-0.5.1.orig/doc/README slackware-live-0.5.1/doc/README
+--- slackware-live-0.5.1.orig/doc/README	2014-02-06 20:12:04.000000000 +0200
++++ slackware-live-0.5.1/doc/README	2016-11-07 21:33:49.596295421 +0200
+@@ -1,9 +1,9 @@
+ Slackware Live is a live DVD/USB/NFS build and install tool written for Slackware (& Slackware64) Linux:
+ - support GPT and legacy MBR partitionned disks, UEFI and CSM (legacy / BIOS) booting
+ - contains all the necessary to convert an installed system to a live system and vice-versa;
+-- it doesn't need any kernel recompile, but it support seamlessly AUFS and SquashFS-XZ/LZMA if your kernel support them;
++- it doesn't need any kernel recompile (using overlayfs);
+ - no changes are needed on the system to make live; the live system boots like an installed one (100% compatible with stock Slackware);
+ - support persistent changes;
+ - ...
+ 
+-A GUI for the installation program and a synchronization tool (for home directory backup/restore) are provided separately;
++A GUI for the installation program (SLI) is provided separately.
 diff -Naur slackware-live-0.5.1.orig/scripts/build-slackware-live.sh slackware-live-0.5.1/scripts/build-slackware-live.sh
 --- slackware-live-0.5.1.orig/scripts/build-slackware-live.sh	2014-02-11 22:32:24.000000000 +0200
 +++ slackware-live-0.5.1/scripts/build-slackware-live.sh	2016-11-07 21:28:16.095313293 +0200
