@@ -1,6 +1,6 @@
 diff -Naur slackware-live-0.4.5.orig/scripts/build-slackware-live.sh slackware-live-0.4.5/scripts/build-slackware-live.sh
 --- slackware-live-0.4.5.orig/scripts/build-slackware-live.sh	2014-02-11 22:32:24.000000000 +0200
-+++ slackware-live-0.4.5/scripts/build-slackware-live.sh	2016-10-09 13:20:58.545489649 +0300
++++ slackware-live-0.4.5/scripts/build-slackware-live.sh	2016-10-09 13:20:58.545489000 +0300
 @@ -1,4 +1,8 @@
  #!/bin/sh
 +#Dimitris Tzemos <dijemos@gmail.com> (changes for slackel,salix)
@@ -895,7 +895,7 @@ diff -Naur slackware-live-0.4.5.orig/scripts/build-slackware-live.sh slackware-l
  	exit $CMDERROR
 diff -Naur slackware-live-0.4.5.orig/scripts/init slackware-live-0.4.5/scripts/init
 --- slackware-live-0.4.5.orig/scripts/init	2014-02-07 11:04:23.000000000 +0200
-+++ slackware-live-0.4.5/scripts/init	2016-10-09 13:29:42.411461576 +0300
++++ slackware-live-0.4.5/scripts/init	2016-10-30 19:11:48.985852000 +0200
 @@ -1,12 +1,25 @@
  #!/bin/ash
  
@@ -1047,7 +1047,7 @@ diff -Naur slackware-live-0.4.5.orig/scripts/init slackware-live-0.4.5/scripts/i
  
  #load requested optional modules
  for modulename in `echo $include | sed 's/:/ /g'`; do
-@@ -113,63 +124,72 @@
+@@ -113,63 +124,79 @@
  		mount -o loop -t squashfs /slroot/live/media/boot/optional/$modulename /slroot/live/modules/$modulename
  		modulesbranches="/slroot/live/modules/$modulename=ro:$modulesbranches"
  		echo "Loading SquashFS module $modulename"
@@ -1086,7 +1086,7 @@ diff -Naur slackware-live-0.4.5.orig/scripts/init slackware-live-0.4.5/scripts/i
 -		if [ ! -b $changes ]; then
 -			mount -o remount,rw /slroot/live/media
 -		fi
-+		mkdir /slroot/live/$changes
++		mkdir -p /slroot/live/$changes
  		if echo $changes | grep -q "="; then
  			filesize=`echo "$changes" | cut -f2 -d=`
  			changes=`echo "$changes" | cut -f1 -d=`
@@ -1138,17 +1138,23 @@ diff -Naur slackware-live-0.4.5.orig/scripts/init slackware-live-0.4.5/scripts/i
  	else
  		echo "Using persistent system storage ($changes)"
 -		mount -t nfs -o nolock $changes /slroot/live/changes #TODO: no auth / security
++		mkdir -p /slroot/live/$changes
 +		mount -t nfs -o nolock $changes /slroot/live/$changes #TODO: no auth / security
  	fi
  fi
--
+ 
  #mount (union) all modules (ro) and /live/changes (rw) in /live/union (rw)
 -mkdir /slroot/live/union
 -mkdir -p /slroot/live/changes
 -mount -t aufs -o br=/slroot/live/changes=rw:$aufsmodulesbranches none /slroot/live/union 2>/dev/null ||
 -unionfs -o allow_other,suid,dev,use_ino,cow,max_files=524288,chroot=/slroot /live/changes=rw:$unionfsmodulesbranches /slroot/live/union
-+UPPERDIR=/slroot/live/$changes/changes
-+WORKOVLDIR=/slroot/live/$changes/ofswd
++if [ ! -z "$changes" ]; then
++	UPPERDIR=/slroot/live/$changes/changes
++	WORKOVLDIR=/slroot/live/$changes/ofswd
++else
++	UPPERDIR=/slroot/live/changes
++	WORKOVLDIR=/slroot/live/ofswd
++fi
 +mkdir -p /slroot/live/union
 +[ ! -d ${UPPERDIR} ] && mkdir -p ${UPPERDIR}
 +[ ! -d ${WORKOVLDIR} ] && mkdir -p ${WORKOVLDIR}
@@ -1157,7 +1163,7 @@ diff -Naur slackware-live-0.4.5.orig/scripts/init slackware-live-0.4.5/scripts/i
  
  #setup system tree
  for directory in /slroot/live/union/*; do #bind /live/union top directories into /
-@@ -184,62 +204,74 @@
+@@ -184,62 +211,74 @@
  mknod /slroot/dev/console c 5 1 2>/dev/null
  mknod /slroot/dev/null c 1 3 2>/dev/null #needed to mount /proc (rc.S) on read-only filesystem
  cat > /slroot/live/union/etc/fstab << END
@@ -1218,7 +1224,7 @@ diff -Naur slackware-live-0.4.5.orig/scripts/init slackware-live-0.4.5/scripts/i
 -if [ "$mediadetected" == "nfs" ] && [ -x /slroot/live/union/etc/rc.d/rc.networkmanager ]; then 
 +if [ "$mediadetected" = "nfs" ] && [ -x /slroot/live/union/etc/rc.d/rc.networkmanager ]; then 
  	chmod -x /slroot/live/union/etc/rc.d/rc.networkmanager #if enabled, system hangs
-+else
++elif ! [ -x /slroot/live/union/etc/rc.d/rc.wicd -a -x /slroot/live/union/usr/sbin/wicd ]; then
 +	chmod +x /slroot/live/union/etc/rc.d/rc.networkmanager
  fi
  
@@ -1259,7 +1265,7 @@ diff -Naur slackware-live-0.4.5.orig/scripts/init slackware-live-0.4.5/scripts/i
  	sed	-e "s@\(/sbin/reboot\)@reboot -w; shutdown -k now \>/dev/null\n  cdrecord --eject dev=$livedevice \>/dev/null 2\>\&1\n  sleep 5\n  \1@" \
  		-e "s@\(/sbin/poweroff\)@poweroff -w; shutdown -k now \>/dev/null\n  cdrecord --eject dev=$livedevice \>/dev/null 2\>\&1\n  sleep 5\n  \1@" \
  		-i /slroot/live/union/etc/rc.d/rc.6
-@@ -247,6 +279,7 @@
+@@ -247,6 +286,7 @@
  
  #setup persistent homedir
  if [ ! -z "$home" ] && [ ! "$copy2ram" == "yes" ] && [ "$mediadetected" != "cd" ]; then
@@ -1267,7 +1273,7 @@ diff -Naur slackware-live-0.4.5.orig/scripts/init slackware-live-0.4.5/scripts/i
  	uid=1000
  	if [ -z "`grep "^[^:]\+:x:$uid:" /slroot/live/union/etc/passwd | cut -f1 -d:`" ]; then
  		uid=0
-@@ -254,44 +287,41 @@
+@@ -254,44 +294,41 @@
  	homedir=`grep "x:$uid:" /slroot/live/union/etc/passwd | cut -f6 -d:`
  	gid=`grep "x:$uid:" /slroot/live/union/etc/passwd | cut -f4 -d:`
  	if [ "$mediadetected" == "sd" ]; then
@@ -1342,7 +1348,7 @@ diff -Naur slackware-live-0.4.5.orig/scripts/init slackware-live-0.4.5/scripts/i
  		fi
  	else
  		echo "Setting up persistent home directory ($home)"
-@@ -299,22 +329,25 @@
+@@ -299,22 +336,25 @@
  	fi
  fi
  
@@ -1376,7 +1382,7 @@ diff -Naur slackware-live-0.4.5.orig/scripts/init slackware-live-0.4.5/scripts/i
  fi
  END
  		chmod +x /slroot/live/union/etc/profile.d/x.sh
-@@ -328,30 +361,67 @@
+@@ -328,30 +368,67 @@
  	then sed -i s/^export\ LANG=.*/export\ LANG=$locale/ /slroot/live/union/etc/profile.d/lang.sh
  	else echo "export LANG=$locale" >> /slroot/live/union/etc/profile.d/lang.sh
  	fi
@@ -1462,7 +1468,7 @@ diff -Naur slackware-live-0.4.5.orig/scripts/init slackware-live-0.4.5/scripts/i
  fi
  
  if [ ! -z "$tz" ]; then
-@@ -373,23 +443,36 @@
+@@ -373,23 +450,36 @@
  fi
  
  #detect fixed partitions
@@ -1510,7 +1516,7 @@ diff -Naur slackware-live-0.4.5.orig/scripts/init slackware-live-0.4.5/scripts/i
  done
  
  #setup root password
-@@ -404,10 +487,7 @@
+@@ -404,10 +494,7 @@
  umount /proc
  umount /sys
  mount -r -o remount /slroot 2>/dev/null #remount root directory read-only for normal startup
