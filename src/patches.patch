@@ -1,6 +1,6 @@
-diff -Naur slackware-live-0.4.5.orig/scripts/build-slackware-live.sh slackware-live-0.4.5/scripts/build-slackware-live.sh
---- slackware-live-0.4.5.orig/scripts/build-slackware-live.sh	2014-02-11 22:32:24.000000000 +0200
-+++ slackware-live-0.4.5/scripts/build-slackware-live.sh	2016-10-09 13:20:58.545489000 +0300
+diff -Naur slackware-live-0.5.1.orig/scripts/build-slackware-live.sh slackware-live-0.5.1/scripts/build-slackware-live.sh
+--- slackware-live-0.5.1.orig/scripts/build-slackware-live.sh	2014-02-11 22:32:24.000000000 +0200
++++ slackware-live-0.5.1/scripts/build-slackware-live.sh	2016-10-09 13:20:58.545489000 +0300
 @@ -1,4 +1,8 @@
  #!/bin/sh
 +#Dimitris Tzemos <dijemos@gmail.com> (changes for slackel,salix)
@@ -893,9 +893,9 @@ diff -Naur slackware-live-0.4.5.orig/scripts/build-slackware-live.sh slackware-l
  	echo "`basename $0` --share live_dir listen_interface ip_range [modules_list|auto]"
  	echo "`basename $0` --unshare"
  	exit $CMDERROR
-diff -Naur slackware-live-0.4.5.orig/scripts/init slackware-live-0.4.5/scripts/init
---- slackware-live-0.4.5.orig/scripts/init	2014-02-07 11:04:23.000000000 +0200
-+++ slackware-live-0.4.5/scripts/init	2016-10-30 19:11:48.985852000 +0200
+diff -Naur slackware-live-0.5.1.orig/scripts/init slackware-live-0.5.1/scripts/init
+--- slackware-live-0.5.1.orig/scripts/init	2014-02-07 11:04:23.000000000 +0200
++++ slackware-live-0.5.1/scripts/init	2016-10-30 19:11:48.985852182 +0200
 @@ -1,12 +1,25 @@
  #!/bin/ash
  
