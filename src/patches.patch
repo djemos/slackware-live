@@ -1,15 +1,16 @@
 diff -Naur slackware-live-0.4.5.orig/scripts/build-slackware-live.sh slackware-live-0.4.5/scripts/build-slackware-live.sh
 --- slackware-live-0.4.5.orig/scripts/build-slackware-live.sh	2014-02-11 22:32:24.000000000 +0200
-+++ slackware-live-0.4.5/scripts/build-slackware-live.sh	2016-07-23 14:11:37.069614254 +0300
-@@ -1,4 +1,7 @@
++++ slackware-live-0.4.5/scripts/build-slackware-live.sh	2016-10-09 13:20:58.545489649 +0300
+@@ -1,4 +1,8 @@
  #!/bin/sh
 +#Dimitris Tzemos <dijemos@gmail.com> (changes for slackel,salix)
 +
 +LIVELABEL="LIVE" #edit in init script too
++SLACKEL_FLAVOR="Slackel-kde-4.14.21"
  
  CMDERROR=1
  PARTITIONERROR=2
-@@ -6,6 +9,11 @@
+@@ -6,6 +10,11 @@
  BOOTERROR=4
  INSUFFICIENTSPACE=5
  
@@ -21,7 +22,7 @@ diff -Naur slackware-live-0.4.5.orig/scripts/build-slackware-live.sh slackware-l
  function add_packages() {
  	packagesdirectory=$1
  	rootdirectory=$2
-@@ -57,9 +65,9 @@
+@@ -57,12 +66,12 @@
  	umount $rootdirectory/proc
  	rm -f $rootdirectory/tmp/initrd.gz
  	rm -f $rootdirectory/tmp/initrd-tree/{initrd-name,keymap,luksdev,resumedev,rootfs,rootdev,wait-for-root}
@@ -32,8 +33,12 @@ diff -Naur slackware-live-0.4.5.orig/scripts/build-slackware-live.sh slackware-l
 +
  	cp $initscriptbasepath/sbin/build-slackware-live.sh $rootdirectory/tmp/initrd-tree/
  	
- 	for prg in unionfs mkfs.ext3; do
-@@ -72,6 +80,7 @@
+-	for prg in unionfs mkfs.ext3; do
++	for prg in unionfs ; do
+ 		cp `which $prg` $rootdirectory/tmp/initrd-tree/bin/ #UnionFS
+ 		ldd `which $prg` | sed 's/[^\/]*\(\/[^ ]*\) .*/\1/' | sed 's/[^\/]*\(\/[^ ]*\) .*/\1/' | sed -n /^\\//p | sort -u | while read lib; do
+ 			if [ -d $rootdirectory/tmp/initrd-tree/lib64 ]
+@@ -72,6 +81,7 @@
  		done
  	done
  	
@@ -41,7 +46,7 @@ diff -Naur slackware-live-0.4.5.orig/scripts/build-slackware-live.sh slackware-l
  	find $rootdirectory/tmp/initrd-tree/lib/modules/ -name "*.ko" | xargs strip --strip-unneeded
  	cwd=`pwd`
  	cd $rootdirectory/tmp/initrd-tree
-@@ -86,18 +95,23 @@
+@@ -86,18 +96,23 @@
  	#BIOS/syslinux
  	mkdir -p $livedirectory/boot/syslinux
  	cp /usr/share/syslinux/menu.c32 $livedirectory/boot/syslinux/
@@ -72,7 +77,7 @@ diff -Naur slackware-live-0.4.5.orig/scripts/build-slackware-live.sh slackware-l
  	#UEFI/elilo
  	if [ `uname -m` == "x86_64" ]; then
  		mkdir -p $livedirectory/EFI/BOOT
-@@ -105,17 +119,23 @@
+@@ -105,17 +120,23 @@
  		cp $livedirectory/boot/initrd.gz $livedirectory/EFI/BOOT/
  		cp $livedirectory/boot/vmlinuz $livedirectory/EFI/BOOT/
  		if [ ! -f $livedirectory/EFI/BOOT/elilo.conf ]; then
@@ -95,10 +100,10 @@ diff -Naur slackware-live-0.4.5.orig/scripts/build-slackware-live.sh slackware-l
 +#			cat > $livedirectory/EFI/BOOT/elilo.conf << EOF
 +#prompt
 +#timeout=10
-+#default=slackel
++#default=$SLACKEL_FLAVOR
 +#
 +#image=vmlinuz
-+#	label=slackel
++#	label=$SLACKEL_FLAVOR
 +#	initrd=initrd.gz
 +#	append="max_loop=255 runlevel=4"
 +#EOF
@@ -106,7 +111,7 @@ diff -Naur slackware-live-0.4.5.orig/scripts/build-slackware-live.sh slackware-l
  		dd if=/dev/zero of=/tmp/efi.img bs=1k count=16384
  		mkdosfs -n "EFIBOOT" /tmp/efi.img
  		mount -o loop /tmp/efi.img /mnt/floppy
-@@ -253,7 +273,7 @@
+@@ -253,7 +274,7 @@
  	if [ `uname -m` == "x86_64" ]; then
  		altboot="-eltorito-alt-boot -no-emul-boot -eltorito-platform efi -eltorito-boot efi.img"
  	fi
@@ -115,7 +120,15 @@ diff -Naur slackware-live-0.4.5.orig/scripts/build-slackware-live.sh slackware-l
  		-b boot/syslinux/isolinux.bin -boot-load-size 4 -boot-info-table -no-emul-boot \
  		-c boot/syslinux/boot.catalog -hide boot.catalog -hide-joliet boot.catalog $altboot \
  	   $livedirectory
-@@ -273,15 +293,20 @@
+@@ -263,6 +284,7 @@
+ function install_usb() {
+ 	livedirectory=$1
+ 	installmedia=$2
++	LIVEFS=$3
+ 	
+ 	device=`echo $installmedia | cut -c6-8`
+ 	sectorscount=`cat /sys/block/$device/size`
+@@ -273,15 +295,39 @@
  
  	if [ "$installdevice" == "$installmedia" ]; then #install on whole disk: partition and format media
  		if [ `uname -m` == "x86_64" ]; then #EFI/GPT
@@ -124,39 +137,69 @@ diff -Naur slackware-live-0.4.5.orig/scripts/build-slackware-live.sh slackware-l
  			installmedia="$installdevice$partitionnumber"
  			dd if=/dev/zero of=$installdevice bs=512 count=34 >/dev/null 2>&1
 -			echo -e "2\nn\n\n\n+32M\nef00\nn\n\n\n\n\nr\nh\n1 2\nn\n\ny\n\nn\n\nn\nwq\ny\n" | gdisk $installdevice || return $PARTITIONERROR
-+			#echo -e "2\nn\n\n\n+32M\nef00\nn\n\n\n\n0700\nr\nh\n1 2\nn\n\ny\n\nn\n\nn\nwq\ny\n" | gdisk $installdevice || return $PARTITIONERROR
-+			echo -e "2\nn\n\n\n\n0700\nr\nh\n1 2\nn\n\ny\n\nn\n\nn\nwq\ny\n" | gdisk $installdevice || return $PARTITIONERROR
-+			#hybrid MBR with BIOS boot partition (1007K) EFI partition (32M) and live partition
-+			#echo -e "2\nn\n\n\n+32M\nef00\nn\n\n\n\n0700\nn\n128\n\n\nef02\nr\nh\n1 2\nn\n\ny\n\nn\nn\nwq\ny\n" | gdisk $installdevice || return $PARTITIONERROR
- 			partprobe $installdevice >/dev/null 2>&1; sleep 3
- 			mkfs.fat -n "efi"  $installdevice"1" || return $FORMATERROR
+-			partprobe $installdevice >/dev/null 2>&1; sleep 3
+-			mkfs.fat -n "efi"  $installdevice"1" || return $FORMATERROR
 -			mkfs.ext3 -L "Slackware-Live" $installmedia || return $FORMATERROR
-+			#mkfs.ext3 -L "$LIVELABEL" $installmedia || return $FORMATERROR
-+			fat32option="-F 32"
-+			mkfs.vfat $fat32option -n "$LIVELABEL" $installmedia || return $FORMATERROR
++			if [ "$LIVEFS" == "vfat" ]; then
++				partitionnumber=1
++				installmedia="$installdevice$partitionnumber"
++				echo -e "2\nn\n\n\n\n0700\nr\nh\n1 2\nn\n\ny\n\nn\n\nn\nwq\ny\n" | gdisk $installdevice || return $PARTITIONERROR
++				#echo -e "2\nn\n\n\n+32M\nef00\nn\n\n\n\n0700\nr\nh\n1 2\nn\n\ny\n\nn\n\nn\nwq\ny\n" | gdisk $installdevice || return $PARTITIONERROR
++				#hybrid MBR with BIOS boot partition (1007K) EFI partition (32M) and live partition
++				#echo -e "2\nn\n\n\n+32M\nef00\nn\n\n\n\n0700\nn\n128\n\n\nef02\nr\nh\n1 2\nn\n\ny\n\nn\nn\nwq\ny\n" | gdisk $installdevice || return $PARTITIONERROR
++				partprobe $installdevice >/dev/null 2>&1; sleep 3
++				fat32option="-F 32"
++				mkfs.vfat $fat32option -n "$LIVELABEL" $installmedia || return $FORMATERROR
++				sleep 3
++			else
++				efipartition="$installdevice""1"
++				installmedia="$installdevice""2"
++				#hybrid MBR with BIOS boot partition (1007K) EFI partition (32M) and live partition
++				echo -e "2\nn\n\n\n+32M\nef00\nn\n\n\n\n\nr\nh\n1 2\nn\n\ny\n\nn\n\nn\nwq\ny\n" | gdisk $installdevice || return $PARTITIONERROR
++				#echo -e "2\nn\n\n\n+32M\nef00\nn\n\n\n\n\nn\n128\n\n\nef02\nr\nh\n1 2\nn\n\ny\n\nn\nn\nwq\ny\n" | gdisk $installdevice || return $PARTITIONERROR
++				# set the linux partition bootable
++				sgdisk -p -A 2:set:2 $installdevice
++				# confirm it was indeed set correctly
++				sgdisk -p -A 2:show $installdevice
++				partprobe $installdevice; sleep 3
++				echo "*** Formating EFI partition $efipartition ..."
++				mkfs.vfat -n "EFI" $efipartition || return $FORMATERROR
++				echo "*** Formating system partition $installmedia ..."
++				mkfs.ext3 -F -L "$LIVELABEL" $installmedia || return $FORMATERROR
++				sleep 3
++			fi
  		else #BIOS/MBR
 -			partitionnumber=4
 +			partitionnumber=1
  			installmedia="$installdevice$partitionnumber"
  			if (( $mediasize < 2048 ))
  			then heads=128; sectors=32
-@@ -289,9 +314,13 @@
+@@ -289,11 +335,20 @@
  			fi
  			mkdiskimage $installdevice 1 $heads $sectors || return $PARTITIONERROR
  			dd if=/dev/zero of=$installdevice bs=1 seek=446 count=64 >/dev/null 2>&1
 -			echo -e ',0\n,0\n,0\n,,83,*' | sfdisk $installdevice || return $PARTITIONERROR
-+			#echo -e ',0\n,0\n,0\n,,83,*' | sfdisk $installdevice || return $PARTITIONERROR
-+			#echo -e ',0\n,0\n,0\n,,b,*' | sfdisk $installdevice || return $PARTITIONERROR
-+			echo -e ',,b,*' | sfdisk $installdevice || return $PARTITIONERROR
- 			partprobe $installdevice; sleep 3
+-			partprobe $installdevice; sleep 3
 -			mkfs.ext3 -L "Slackware-Live" $installmedia || return $FORMATERROR
-+			#mkfs.ext3 -L "$LIVELABEL" $installmedia || return $FORMATERROR
-+			fat32option="-F 32"
-+			mkfs.vfat $fat32option -n "$LIVELABEL" $installmedia || return $FORMATERROR
++			if [ "$LIVEFS" = "vfat" ]; then
++				#echo -e ',0\n,0\n,0\n,,83,*' | sfdisk $installdevice || return $PARTITIONERROR
++				#echo -e ',0\n,0\n,0\n,,b,*' | sfdisk $installdevice || return $PARTITIONERROR
++				echo -e ',,b,*' | sfdisk $installdevice || return $PARTITIONERROR
++				partprobe $installdevice; sleep 3
++				fat32option="-F 32"
++				mkfs.vfat $fat32option -n "$LIVELABEL" $installmedia || return $FORMATERROR
++			else
++				echo -e ',,83,*' | sfdisk $installdevice || return $PARTITIONERROR
++				partprobe $installdevice; sleep 3
++				mkfs.ext3 -L "$LIVELABEL" $installmedia || return $FORMATERROR
++			fi
++			sleep 3
  		fi
- 		sleep 3
+-		sleep 3
  	
-@@ -303,14 +332,14 @@
+ 	else #install on partition: filesystem check and format if needed
+ 		partitionnumber=`echo $installmedia | cut -c9-`
+@@ -303,14 +358,14 @@
  			umount /mnt/tmp
  			fsck -fy $installmedia >/dev/null 2>&1
  		else #format partition
@@ -173,7 +216,7 @@ diff -Naur slackware-live-0.4.5.orig/scripts/build-slackware-live.sh slackware-l
  				;;
  			*)
  				partition=`echo $installmedia | cut -c6-`
-@@ -319,30 +348,30 @@
+@@ -319,48 +374,72 @@
  				if (( $size > 1024 )); then
  					fat32option="-F 32"
  				fi
@@ -185,23 +228,6 @@ diff -Naur slackware-live-0.4.5.orig/scripts/build-slackware-live.sh slackware-l
  	fi
  	
  	#live system files copy
--	if [ `uname -m` == "x86_64" ]; then #EFI/GPT
--		efipartition="$installdevice"`gdisk -l $installdevice 2>/dev/null | grep " EF00 " | sed 's/  */:/g' | cut -f2 -d:`
--		if [ ! -z "$efipartition" ] && [ "$efipartition" != "$installmedia" ]; then
--			mkdir -p /mnt/tmp
--			if mount $efipartition /mnt/tmp >/dev/null 2>&1; then
--				sleep 1
--				umount /mnt/tmp
--			else
--				mkfs.fat -n  "efi" $efipartition || return $FORMATERROR
--			fi
--			mkdir -p /mnt/efi
--			mount $efipartition /mnt/efi
--			cp -r $livedirectory/EFI /mnt/efi/
--			umount /mnt/efi
--			rmdir /mnt/efi
--		fi
--	fi
 +#	if [ `uname -m` == "x86_64" ]; then #EFI/GPT
 +#		efipartition="$installdevice"`gdisk -l $installdevice 2>/dev/null | grep " EF00 " | sed 's/  */:/g' | cut -f2 -d:`
 +#		if [ ! -z "$efipartition" ] && [ "$efipartition" != "$installmedia" ]; then
@@ -219,10 +245,72 @@ diff -Naur slackware-live-0.4.5.orig/scripts/build-slackware-live.sh slackware-l
 +#			rmdir /mnt/efi
 +#		fi
 +#	fi
- 	
- 	mkdir -p /mnt/install
- 	mount $installmedia /mnt/install
-@@ -374,21 +403,117 @@
++	
++	mkdir -p /mnt/install
++	mount $installmedia /mnt/install
++	cp -r $livedirectory/boot /mnt/install/
+ 	if [ `uname -m` == "x86_64" ]; then #EFI/GPT
+-		efipartition="$installdevice"`gdisk -l $installdevice 2>/dev/null | grep " EF00 " | sed 's/  */:/g' | cut -f2 -d:`
+-		if [ ! -z "$efipartition" ] && [ "$efipartition" != "$installmedia" ]; then
+-			mkdir -p /mnt/tmp
+-			if mount $efipartition /mnt/tmp >/dev/null 2>&1; then
+-				sleep 1
+-				umount /mnt/tmp
+-			else
+-				mkfs.fat -n  "efi" $efipartition || return $FORMATERROR
+-			fi
++		if [ "$LIVEFS" == "vfat" ]; then
++			cp -r $livedirectory/EFI /mnt/install/
++			cp $livedirectory/efi.img /mnt/install/
++		else
++			echo "*** Installing EFI on $efipartition ..."
+ 			mkdir -p /mnt/efi
+-			mount $efipartition /mnt/efi
++			mount $efipartition /mnt/efi; sleep 1
+ 			cp -r $livedirectory/EFI /mnt/efi/
++			cp $livedirectory/efi.img /mnt/efi
+ 			umount /mnt/efi
+ 			rmdir /mnt/efi
+ 		fi
+ 	fi
+-	
+-	mkdir -p /mnt/install
+-	mount $installmedia /mnt/install
+-	cp -r $livedirectory/boot /mnt/install/
+-	if [ `uname -m` == "x86_64" ]; then #EFI/GPT
+-		cp -r $livedirectory/EFI /mnt/install/
+-		cp $livedirectory/efi.img /mnt/install/
+-	fi
+ 	if fdisk -l $installdevice 2>/dev/null | grep -q "^$installmedia "; then #legacy / CSM (Compatibility Support Module) boot, if $installmedia present in MBR (or hybrid MBR)
+ 		sfdisk --force $installdevice -A $partitionnumber 2>/dev/null
+ 		if mount | grep -q "^$installmedia .* vfat "; then #FAT32
+ 			umount /mnt/install
++			# Use syslinux to make the USB device bootable:
++			echo "--- Making the USB drive '$installdevice' bootable using syslinux..."
+ 			syslinux -d /boot/syslinux $installmedia || return $BOOTERROR
+-		else #Ext3 
++			cat /usr/share/syslinux/mbr.bin > $installdevice
++		else #ext3
++			#mv /mnt/install/boot/syslinux /mnt/install/boot/extlinux
++			#mv /mnt/install/boot/extlinux/syslinux.cfg /mnt/install/boot/extlinux/extlinux.conf
++			#rm -f /mnt/install/boot/extlinux/isolinux.*
++			#rm -f /mnt/install/boot/extlinux/boot.catalog
++			#/sbin/extlinux --install /mnt/install/boot/extlinux
++			# Use extlinux to make the USB device bootable:
++			echo "--- Making the USB drive '$installdevice' bootable using extlinux..."
+ 			extlinux -i /mnt/install/boot/syslinux || return $BOOTERROR
+ 			umount /mnt/install
++			if fdisk -l $installdevice 2>/dev/null | grep -q 'GPT\|gpt'; then
++				cat /usr/share/syslinux/gptmbr.bin > $installdevice
++			else
++				cat /usr/share/syslinux/mbr.bin > $installdevice
++			fi
+ 		fi
+-		cat /usr/share/syslinux/mbr.bin > $installdevice
+ 	else
+ 		umount /mnt/install
+ 	fi
+@@ -374,21 +453,117 @@
  	rootdirectory=$1
  	systempart=$2
  	loadersetup=$3
@@ -347,7 +435,7 @@ diff -Naur slackware-live-0.4.5.orig/scripts/build-slackware-live.sh slackware-l
  
  	sed -i /^root:/d /mnt/install/etc/shadow #setup root password
  	cat /etc/shadow | sed -n /^root:/p >> /mnt/install/etc/shadow
-@@ -397,8 +522,8 @@
+@@ -397,8 +572,8 @@
  		cp -f /etc/rc.d/rc.keymap /mnt/install/etc/rc.d/
  	fi
  	cp -f /etc/profile.d/lang.sh /mnt/install/etc/profile.d/
@@ -358,7 +446,7 @@ diff -Naur slackware-live-0.4.5.orig/scripts/build-slackware-live.sh slackware-l
  	fi
  	if [ -f /etc/X11/xorg.conf ]; then
  		cp -f /etc/X11/xorg.conf /mnt/install/etc/X11/
-@@ -411,23 +536,76 @@
+@@ -411,23 +586,76 @@
  		cp -f /etc/hardwareclock /mnt/install/etc/
  	fi
  	#Copy end
@@ -441,7 +529,7 @@ diff -Naur slackware-live-0.4.5.orig/scripts/build-slackware-live.sh slackware-l
  		kv=`basename /mnt/install/lib/modules/*`
  		if lsmod | grep -q $SYSINSTALLFS; then
  			moduleslist="$SYSINSTALLFS"
-@@ -445,16 +623,17 @@
+@@ -445,16 +673,17 @@
  		done
  		moduleslist=`echo $moduleslist | sed 's/:$//'`
  		if [ ! -z "$moduleslist" ] && [ "$moduleslist" != "sg" ]; then
@@ -462,29 +550,29 @@ diff -Naur slackware-live-0.4.5.orig/scripts/build-slackware-live.sh slackware-l
  		if [ -d /sys/firmware/efi ]; then #UEFI
  			modprobe efivars
  			efipartnum=`gdisk -l $installdevice | grep "EF00" | sed 's/  \+/ /g' | cut -f2 -d' '`
-@@ -462,7 +641,7 @@
+@@ -462,7 +691,7 @@
  			if [ ! -z "$efipartition" ]; then
  				mkdir -p /mnt/efi
  				mount $efipartition /mnt/efi
 -				efilabel="Slackware"
-+				efilabel="Slackel"
++				efilabel=$SLACKEL_FLAVOR
  				if [ -d /mnt/efi/EFI/$efilabel ]; then
  					conflictpart=`cat /mnt/efi/EFI/$efilabel/elilo.conf | grep "append" | sed 's/.*root=\([^ ]*\).*/\1/'`
  					if [ "$conflictpart" == "$systempart" ]
-@@ -476,10 +655,10 @@
+@@ -476,10 +705,10 @@
  				cp /mnt/install/boot/vmlinuz /mnt/efi/EFI/$efilabel/
  				cat > /mnt/efi/EFI/$efilabel/elilo.conf << EOF
  timeout=1
 -default=slackware
-+default=slackel
++default=$SLACKEL_FLAVOR
  
  image=vmlinuz
 -    label=slackware
-+    label=slackel
++    label=$SLACKEL_FLAVOR
      append="root=$systempart ro"
  	read-only
  EOF
-@@ -489,14 +668,14 @@
+@@ -489,14 +718,14 @@
  				fi
  				umount /mnt/efi
  				rmdir /mnt/efi
@@ -502,16 +590,16 @@ diff -Naur slackware-live-0.4.5.orig/scripts/build-slackware-live.sh slackware-l
  bmp-colors = 255,0,255,0,255,0
  bmp-table = 60,6,1,16
  bmp-timer = 65,27,0,255
-@@ -514,7 +693,7 @@
+@@ -514,7 +743,7 @@
  
  image = /boot/vmlinuz
  root = $systempart
 -label = Linux
-+label = slackel
++label = $SLACKEL_FLAVOR
  read-only
  EOF
  			if [ -f /mnt/install/boot/initrd.gz ]; then
-@@ -529,16 +708,233 @@
+@@ -529,16 +758,234 @@
  table = $installdevice
  EOF
  			fi
@@ -539,7 +627,8 @@ diff -Naur slackware-live-0.4.5.orig/scripts/build-slackware-live.sh slackware-l
 +			mount $efipartition /mnt/efi
 +			if  [ `uname -m` != "x86_64" ] ; then #modprobe efivars fails on 32 bits Slackware
 +				mv /lib/modules/`uname -r`/kernel/drivers/firmware/efi/efivars.{ko,ok}
-+				efidir="slackware-`cat /etc/slackware-version | cut -f2 -d' '`"
++				#efidir="slackware-`cat /etc/slackware-version | cut -f2 -d' '`"
++				efidir=$SLACKEL_FLAVOR
 +				echo "*** add boot entry for '\\EFI\\$efidir\\grubx64.efi' from UEFI setup ***"
 +			fi
 +			grub-install --efi-directory /mnt/efi --boot-directory /mnt/install/boot/ --target=x86_64-efi 2>/dev/null && grubstatus=0
@@ -551,7 +640,7 @@ diff -Naur slackware-live-0.4.5.orig/scripts/build-slackware-live.sh slackware-l
 +		else #CSM
 +			if echo -e "print\nquit" | parted $installdevice | grep -q ": msdos$" || 
 +				gdisk -l $installdevice 2>/dev/null | grep -q " EF02 "; then
-+				grub-install --target=i386-pc --boot-directory /mnt/install/boot $installdevice  && grubstatus=0 #grub-bios-setup
++				grub-install --target=i386-pc --boot-directory /mnt/install/boot --recheck --force $installdevice  && grubstatus=0 #grub-bios-setup
 +			else
 +				echo "Warning : GRUB can't be installed:"
 +				#if [ -d /sys/firmware/efi ]; then
@@ -749,7 +838,7 @@ diff -Naur slackware-live-0.4.5.orig/scripts/build-slackware-live.sh slackware-l
  	return 0
  }
  
-@@ -659,7 +1055,10 @@
+@@ -659,7 +1106,11 @@
  	moduleslist=$4
  	if [ -d "$rootdirectory" ] && [ ! -z "$livedirectory" ]; then
  		if [ -z "$moduleslist" ]; then
@@ -757,11 +846,12 @@ diff -Naur slackware-live-0.4.5.orig/scripts/build-slackware-live.sh slackware-l
 +			#moduleslist="squashfs:fuse:loop:ehci-pci:xhci-hcd:usb-storage"
 +			#moduleslist="squashfs:fuse:loop:xhci-pci:ehci-pci:usb-storage:ext3:isofs"
 +			#moduleslist="squashfs:fuse:loop:xhci-pci:ohci-pci:ehci-pci:xhci-hcd:uhci-hcd:ehci-hcd:usb-storage:hid:usbhid:hid-generic:hid-cherry:hid-logitech:hid-logitech-dj:hid-logitech-hidpp:hid-lenovo:hid-microsoft:jbd:mbcache:ext3:ext4:isofs:fat:nls_cp437:nls_iso8859-1:msdos:vfat"
-+			moduleslist="squashfs:fuse:loop:xhci-pci:ohci-pci:ehci-pci:xhci-hcd:uhci-hcd:ehci-hcd:usb-storage:hid:usbhid:i2c-hid:hid-generic:hid-cherry:hid-logitech:hid-logitech-dj:hid-logitech-hidpp:hid-lenovo:hid-microsoft:hid_multitouch:isofs:nls_cp437:nls_iso8859-1"
++			#moduleslist="squashfs:fuse:loop:xhci-pci:ohci-pci:ehci-pci:xhci-hcd:uhci-hcd:ehci-hcd:usb-storage:hid:usbhid:i2c-hid:hid-generic:hid-cherry:hid-logitech:hid-logitech-dj:hid-logitech-hidpp:hid-lenovo:hid-microsoft:hid_multitouch:isofs:nls_cp437:nls_iso8859-1"
++			moduleslist="squashfs:overlay:loop:xhci-pci:ohci-pci:ehci-pci:xhci-hcd:uhci-hcd:ehci-hcd:usb-storage:hid:usbhid:i2c-hid:hid-generic:hid-cherry:hid-logitech:hid-logitech-dj:hid-logitech-hidpp:hid-lenovo:hid-microsoft:hid_multitouch:ext3:ext4:isofs:nls_cp437:nls_iso8859-1"
  		fi
  		init_live $rootdirectory $livedirectory $moduleslist
  	else
-@@ -730,6 +1129,15 @@
+@@ -730,6 +1181,15 @@
  	rootdirectory=$2
  	systempart=$3
  	loadersetup=$4
@@ -777,7 +867,7 @@ diff -Naur slackware-live-0.4.5.orig/scripts/build-slackware-live.sh slackware-l
  	if [ -d "$rootdirectory" ] && [ -b "$systempart" ]; then
  		systemsize=`du -s -m $rootdirectory | sed 's/\t.*//'`
  		device=`echo $systempart | cut -c6-8`
-@@ -741,11 +1149,14 @@
+@@ -741,11 +1201,14 @@
  			echo "error: insufficant space on device '$systempart'"
  			exit $INSUFFICIENTSPACE
  		else
@@ -794,7 +884,7 @@ diff -Naur slackware-live-0.4.5.orig/scripts/build-slackware-live.sh slackware-l
  		exit $CMDERROR
  	fi
  	;;
-@@ -780,7 +1191,7 @@
+@@ -780,7 +1243,7 @@
  	echo "`basename $0` --module root_dir live_dir module_file [-xz|-gzip] [-optional]"
  	echo "`basename $0` --iso live_dir iso_file"
  	echo "`basename $0` --usb live_dir device"
@@ -805,68 +895,203 @@ diff -Naur slackware-live-0.4.5.orig/scripts/build-slackware-live.sh slackware-l
  	exit $CMDERROR
 diff -Naur slackware-live-0.4.5.orig/scripts/init slackware-live-0.4.5/scripts/init
 --- slackware-live-0.4.5.orig/scripts/init	2014-02-07 11:04:23.000000000 +0200
-+++ slackware-live-0.4.5/scripts/init	2016-05-29 19:33:34.800670892 +0300
-@@ -1,5 +1,8 @@
++++ slackware-live-0.4.5/scripts/init	2016-10-09 13:29:42.411461576 +0300
+@@ -1,12 +1,25 @@
  #!/bin/ash
  
 +LIVELABEL="LIVE" #edit in build-slackware-live.sh script too
-+DISTRONAME="Slackel"
++DISTRONAME="Slackel-kde-4.14.21"
 +
  echo ""
  echo "*** Live system initialization ***"
  mount -v proc /proc -t proc
-@@ -30,23 +33,33 @@
- fi
- sleeptime=0
- alreadycheckedpartitions=""
+ mount -v sysfs /sys -t sysfs
+ 
+ /load_kernel_modules 2>/dev/null
+-sleep 3
++# Sometimes the devices need extra time to be available.
++# A root filesystem on USB is a good example of that.
++if [ ! -z "$wait" ]; then
++	sleep $wait
++else
++	sleep 3
++fi
 +
- while [ "$mediadetected" == "none" ] && [ "$sleeptime" != "10" ]; do #try each seconds, but don't wait (USB) more than 10 seconds
++# Fire at least one blkid:
++#blkid 1>/dev/null 2>/dev/null
++
+ mdev -s
+ 
+ mkdir /tmp #fuse needs /tmp
+@@ -25,42 +38,33 @@
+ 	ifconfig eth0 $address netmask $netmask
+ 	route add default gw $gateway
+ 	mount -t nfs -o nolock $nfsroot /slroot/live/media
+-	title=`cat /slroot/live/media/boot/syslinux/syslinux.cfg | grep "menu title " | cut -f3 -d' '`
+-	echo "$title found on $nfsroot"
+-fi
+-sleeptime=0
+-alreadycheckedpartitions=""
+-while [ "$mediadetected" == "none" ] && [ "$sleeptime" != "10" ]; do #try each seconds, but don't wait (USB) more than 10 seconds
 -	for partition in `cat /proc/partitions | sed -e 1d -e 2d | cut -c26-`; do
 -		if mount -o ro /dev/$partition /slroot/live/media >/dev/null 2>/dev/nul; then
 -			if [ -f /slroot/live/media/boot/liveboot ]; then
 -				if [ "$partition" == "sr0" ] || [ "$partition" == "sr1" ]
 -				then mediadetected="cd"
 -				else mediadetected="sd"
-+	if blkid | grep -q "LABEL=\"$LIVELABEL\""; then
-+		livedevice=`blkid | grep "LABEL=\"$LIVELABEL\"" | sed -n 1p | cut -f1 -d:`
-+		echo "$DISTRONAME-Live found on $livedevice"
-+		mount -o ro $livedevice /slroot/live/media
-+		if blkid | grep "LABEL=\"$LIVELABEL\"" | sed -n 1p | grep -q "TYPE=\"iso9660\""
-+		then mediadetected="cd"
-+		else mediadetected="sd"
-+		fi
-+	else
-+		for partition in `cat /proc/partitions | sed -e 1d -e 2d | cut -c26-`; do
-+			if mount -o ro /dev/$partition /slroot/live/media >/dev/null 2>/dev/nul; then
-+				if [ -f /slroot/live/media/boot/liveboot ]; then
-+					if [ "$partition" == "sr0" ] || [ "$partition" == "sr1" ]
-+					then mediadetected="cd"
-+					else mediadetected="sd"
-+					fi
-+					livedevice="/dev/$partition"
-+					echo "$DISTRONAME-Live found on $livedevice"
-+					break
-+				else
-+					umount /slroot/live/media
- 				fi
+-				fi
 -				livedevice="/dev/$partition"
 -				title=`cat /slroot/live/media/boot/syslinux/syslinux.cfg | grep "menu title " | cut -f3 -d' '`
 -				echo "$title found on $livedevice"
 -				break
 -			else
 -				umount /slroot/live/media
++	echo "$LIVELABEL found on $nfsroot"
++else
++	sleeptime=0
++	while [ "$mediadetected" = "none" ] && [ "$sleeptime" != "10" ]; do #try each seconds, but don't wait (USB) more than 10 seconds
++		if blkid | grep -q "LABEL=\"$LIVELABEL\""; then
++			livedevice=`blkid | grep "LABEL=\"$LIVELABEL\"" | sed -n 1p | cut -f1 -d:`
++			echo "$DISTRONAME-Live found on $livedevice"
++			mount -o ro $livedevice /slroot/live/media
++			if blkid | grep "LABEL=\"$LIVELABEL\"" | sed -n 1p | grep -q "TYPE=\"iso9660\""
++			then mediadetected="cd"
++			else mediadetected="sd"
  			fi
++		else
++			sleep 1
++			let sleeptime+=1
++			mdev -s
+ 		fi
+ 	done
+-	if [ "$mediadetected" == "none" ]; then
+-		sleep 1
+-		let sleeptime+=1
+-		mdev -s
+-	fi
+-done
++fi
+ 
+ if [ "$mediadetected" == "none" ]; then
+ 	echo "*** Live system error - live media not detected - exiting ***"
+ 	sh
+ fi
+ 
+-#copy live-media to RAM if requested
+-if [ "$copy2ram" == "yes" ]; then
++##copy live-media to RAM if requested
++if [ "$copy2ram" = "yes" ]; then
+ 	echo -n "Copying live system to RAM ..."
+ 	mkdir /slroot/live/tmp
+ 	mount --move /slroot/live/media /slroot/live/tmp
+@@ -70,14 +74,17 @@
+ 	for bootfile in `find /slroot/live/tmp/boot -maxdepth 1 -type f`; do
+ 		cp $bootfile /slroot/live/media/boot/
+ 	done
+-	cp -r /slroot/live/tmp/boot/syslinux /slroot/live/media/boot/
++	cp -r /slroot/live/tmp/boot/grub /slroot/live/media/boot/
++	touch /slroot/live/media/boot/
+ 	mkdir /slroot/live/media/boot/modules
+-	for module in /slroot/live/tmp/boot/modules/*; do #first copy main non excluded modules
+-		modulename=`basename $module`
+-		if ! echo $exclude | sed 's/:/\n/g' | grep -q "^$modulename$"; then
+-			cp /slroot/live/tmp/boot/modules/$modulename /slroot/live/media/boot/modules/
 -		fi
 -	done
++	if [ `ls /slroot/live/tmp/boot/modules/ | wc -l` != 0 ]; then
++		for module in /slroot/live/tmp/boot/modules/*; do #first copy main non excluded modules
++			modulename=`basename $module`
++			if ! echo $exclude | sed 's/:/\n/g' | grep -q "^$modulename$"; then
++				cp /slroot/live/tmp/boot/modules/$modulename /slroot/live/media/boot/modules/
++			fi
 +		done
 +	fi
- 	if [ "$mediadetected" == "none" ]; then
- 		sleep 1
- 		let sleeptime+=1
-@@ -136,17 +149,17 @@
+ 	mkdir /slroot/live/media/boot/optional
+ 	for modulename in `echo $include | sed 's/:/ /g'`; do #copy included optional modules
+ 		if [ -f /slroot/live/tmp/boot/optional/$modulename ]; then
+@@ -88,7 +95,7 @@
+ 	umount /slroot/live/tmp
+ 	rmdir /slroot/live/tmp
+ 	mount -o remount,ro /slroot/live/media
+-	if [ "$mediadetected" == "cd" ]; then
++	if [ "$mediadetected" = "cd" ]; then
+ 		eject $livedevice
+ 	fi
+ 	echo " done"
+@@ -96,15 +103,19 @@
+ 
+ #mount all modules in /live/modules/* except excluded ones
+ mkdir /slroot/live/modules
+-for module in /slroot/live/media/boot/modules/*; do
+-	modulename=`basename $module`
+-	if ! echo $exclude | sed 's/:/\n/g' | grep -q "^$modulename$"; then #if module is not excluded by bootparam
+-		mkdir /slroot/live/modules/$modulename
+-		mount -o loop -t squashfs $module /slroot/live/modules/$modulename
+-		modulesbranches="/slroot/live/modules/$modulename=ro:$modulesbranches"
+-		echo "Loading SquashFS module $modulename"
+-	fi
+-done
++modulescount=0
++if [ `ls /slroot/live/media/boot/modules/ | wc -l` != 0 ]; then
++	for module in /slroot/live/media/boot/modules/*; do
++		modulename=`basename $module`
++		if ! echo $exclude | sed 's/:/\n/g' | grep -q "^$modulename$"; then #if module is not excluded by bootparam
++			mkdir /slroot/live/modules/$modulename
++			mount -o loop -t squashfs $module /slroot/live/modules/$modulename
++			modulesbranches="/slroot/live/modules/$modulename=ro:$modulesbranches"
++			echo "Loading SquashFS module $modulename"
++			modulescount=$(($modulescount+1))
++		fi
++	done
++fi
+ 
+ #load requested optional modules
+ for modulename in `echo $include | sed 's/:/ /g'`; do
+@@ -113,63 +124,72 @@
+ 		mount -o loop -t squashfs /slroot/live/media/boot/optional/$modulename /slroot/live/modules/$modulename
+ 		modulesbranches="/slroot/live/modules/$modulename=ro:$modulesbranches"
+ 		echo "Loading SquashFS module $modulename"
++		modulescount=$(($modulescount+1))
+ 	fi
+ done
+-aufsmodulesbranches=`echo $modulesbranches | sed 's/:$//'`
+-unionfsmodulesbranches=`echo $aufsmodulesbranches | sed 's/\/slroot//g'`
++
++if [ $modulescount = 0 ]; then 
++	echo -e "\nError: no modules has been loaded"
++	exec sh
++fi
++
++modulesbranches=`echo $modulesbranches | sed 's/:$//'`
++unionfsmodulesbranches=`echo $modulesbranches | sed 's/\/slroot//g'` #TODO: Unionfs-
++overlaymodulesbranches=`echo $modulesbranches | sed 's/=ro//g'`
+ 
+ #mount (union) all modules in /live/system (ro)
+-mkdir /slroot/live/.nochanges #workaround because AUFS doesn't allow read-only union
+ mkdir /slroot/live/system
+-mount -t aufs -o ro,br=/slroot/live/.nochanges=rw:$aufsmodulesbranches none /slroot/live/system 2>/dev/null ||
+-unionfs -o ro,allow_other,suid,dev,use_ino,cow,max_files=524288,chroot=/slroot $unionfsmodulesbranches /slroot/live/system
+-
++if [ $modulescount = 1 ]
++then mount --bind $overlaymodulesbranches /slroot/live/system
++else mount -t overlay -o ro,lowerdir=$overlaymodulesbranches overlay /slroot/live/system 2>/dev/null ||
++		unionfs -o ro,allow_other,suid,dev,use_ino,cow,max_files=524288,chroot=/slroot $unionfsmodulesbranches /slroot/live/system #TODO - (required for NFS)
++fi
++ 
+ #setup persistent system changes
+ if [ ! -z "$changes" ] && [ ! "$copy2ram" == "yes" ] && [ "$mediadetected" != "cd" ]; then
+-	mkdir /slroot/live/changes
++		echo "Using persistent system storage ($changes)"
+ 	if [ "$mediadetected" == "sd" ]; then
+-		if [ ! -b $changes ]; then
+-			mount -o remount,rw /slroot/live/media
+-		fi
++		mkdir /slroot/live/$changes
+ 		if echo $changes | grep -q "="; then
+ 			filesize=`echo "$changes" | cut -f2 -d=`
  			changes=`echo "$changes" | cut -f1 -d=`
  		fi
- 		if [ ! -d /slroot/live/media/$changes ] && [ ! -f /slroot/live/media/$changes ] && [ ! -b $changes ]; then #storage space creation
+-		if [ ! -d /slroot/live/media/$changes ] && [ ! -f /slroot/live/media/$changes ] && [ ! -b $changes ]; then #storage space creation
 -			if  [ ! -z "$filesize" ]; then
 -				echo "Creating $changes ($filesize MB) persistent system storage ..."
 -				dd if=/dev/zero of=/slroot/live/media/$changes bs=1024k count=0 seek=$filesize #TODO: check available space
@@ -875,6 +1100,7 @@ diff -Naur slackware-live-0.4.5.orig/scripts/init slackware-live-0.4.5/scripts/i
 -				sleep 1
 -			else
 -				#if mount | grep -q "$livedevice on /slroot/live/media type ext3"; then #TODO: check FS type
++		if [ ! -d /slroot/live/media/$changes ] && [ ! -f /slroot/live/media/$changes ]; then #storage space creation
 +			#if  [ ! -z "$filesize" ]; then
 +			#	echo "Creating $changes ($filesize MB) persistent system storage ..."
 +			#	dd if=/dev/zero of=/slroot/live/media/$changes bs=1024k count=0 seek=$filesize #TODO: check available space
@@ -883,37 +1109,176 @@ diff -Naur slackware-live-0.4.5.orig/scripts/init slackware-live-0.4.5/scripts/i
 +			#	sleep 1
 +			#else
 +				if mount | grep -q "$livedevice on /slroot/live/media type ext3"; then #TODO: check FS type
++				echo "mount $livedevice on /slroot/live/media type ext3"
++				mount -o remount,rw /slroot/live/media
  				mkdir -p /slroot/live/media/$changes
 -				#fi
 -			fi
-+				fi
+-		fi
+-		if [ -d /slroot/live/media/$changes ] || [ -f /slroot/live/media/$changes ] || [ -b $changes ]; then
+-			echo "Using persistent system storage ($changes)"
+-			if [ -b $changes ]
+-			then mount $changes /slroot/live/changes
+-			else
+-				if [ -d /slroot/live/media/$changes ]
+-				then mount --bind /slroot/live/media/$changes /slroot/live/changes
+-				else mount -o loop /slroot/live/media/$changes /slroot/live/changes
+ 				fi
+-			fi
 +			#fi
  		fi
- 		if [ -d /slroot/live/media/$changes ] || [ -f /slroot/live/media/$changes ] || [ -b $changes ]; then
- 			echo "Using persistent system storage ($changes)"
-@@ -174,8 +187,10 @@
++		if [ -f /slroot/live/media/$changes ];	then 
++			mount -o remount,rw /slroot/live/media
++			mount -o loop /slroot/live/media/$changes /slroot/live/$changes
++		fi
++		if	[ -d /slroot/live/media/$changes ]; then
++			mount -o remount,rw /slroot/live/media
++			mount --bind /slroot/live/media/$changes /slroot/live/$changes
++		fi	
+ 	else
+ 		echo "Using persistent system storage ($changes)"
+-		mount -t nfs -o nolock $changes /slroot/live/changes #TODO: no auth / security
++		mount -t nfs -o nolock $changes /slroot/live/$changes #TODO: no auth / security
+ 	fi
+ fi
+-
+ #mount (union) all modules (ro) and /live/changes (rw) in /live/union (rw)
+-mkdir /slroot/live/union
+-mkdir -p /slroot/live/changes
+-mount -t aufs -o br=/slroot/live/changes=rw:$aufsmodulesbranches none /slroot/live/union 2>/dev/null ||
+-unionfs -o allow_other,suid,dev,use_ino,cow,max_files=524288,chroot=/slroot /live/changes=rw:$unionfsmodulesbranches /slroot/live/union
++UPPERDIR=/slroot/live/$changes/changes
++WORKOVLDIR=/slroot/live/$changes/ofswd
++mkdir -p /slroot/live/union
++[ ! -d ${UPPERDIR} ] && mkdir -p ${UPPERDIR}
++[ ! -d ${WORKOVLDIR} ] && mkdir -p ${WORKOVLDIR}
++mount -t overlay -o workdir=${WORKOVLDIR},upperdir=${UPPERDIR},lowerdir=$overlaymodulesbranches overlay /slroot/live/union 2>/dev/null ||
++	unionfs -o allow_other,suid,dev,use_ino,cow,max_files=524288,chroot=/slroot /live/changes=rw:$unionfsmodulesbranches /slroot/live/union #TODO - (required for NFS)
+ 
  #setup system tree
  for directory in /slroot/live/union/*; do #bind /live/union top directories into /
- 	directoryname=`basename $directory`
-+	if [[ -d "${directory}" && ! -L "${directory}" ]] ; then
- 	mkdir /slroot/$directoryname
- 	mount --bind $directory /slroot/$directoryname
-+	fi
- done
- mkdir -p /slroot/tmp
- mkdir -p /slroot/sys
-@@ -186,6 +201,7 @@
+@@ -184,62 +204,74 @@
+ mknod /slroot/dev/console c 5 1 2>/dev/null
+ mknod /slroot/dev/null c 1 3 2>/dev/null #needed to mount /proc (rc.S) on read-only filesystem
  cat > /slroot/live/union/etc/fstab << END
- proc /proc proc defaults 0 0
- sysfs /sys sysfs defaults 0 0
-+tmpfs /dev/shm tmpfs defaults 0 0
- none / tmpfs defaults 0 0
+-proc /proc proc defaults 0 0
+-sysfs /sys sysfs defaults 0 0
+-none / tmpfs defaults 0 0
++proc      /proc       proc        defaults   0   0
++sysfs     /sys        sysfs       defaults   0   0
++tmpfs     /tmp        tmpfs       defaults,nodev,nosuid,mode=1777  0   0
++tmpfs     /var/tmp    tmpfs       defaults,nodev,nosuid,mode=1777  0   0
++tmpfs     /dev/shm    tmpfs       defaults,nodev,nosuid,mode=1777  0   0
++devpts    /dev/pts    devpts      gid=5,mode=620   0   0
++none      /           tmpfs       defaults   1   1
++
  END
  
-@@ -262,25 +278,25 @@
+ #system startup tweaking
+ if [ ! -z "$changes" ]; then
+-	cp -f /slroot/live/system/etc/rc.d/rc.S /slroot/live/union/etc/rc.d/
+-	cp -f /slroot/live/system/etc/rc.d/rc.M /slroot/live/union/etc/rc.d/
+-	cp -f /slroot/live/system/etc/rc.d/rc.modules /slroot/live/union/etc/rc.d/
++	#cp -f /slroot/live/system/etc/rc.d/rc.S /slroot/live/union/etc/rc.d/
++	#cp -f /slroot/live/system/etc/rc.d/rc.M /slroot/live/union/etc/rc.d/
++	#cp -f /slroot/live/system/etc/rc.d/rc.modules /slroot/live/union/etc/rc.d/
+ 	rm -f /slroot/live/union/etc/udev/rules.d/70-persistent-net.rules
+ fi
++
+ touch /slroot/live/union/etc/fastboot
+ echo "cat /proc/mounts | grep -v '^rootfs' > /etc/mtab" >> /slroot/live/union/etc/rc.d/rc.S #update /etc/mtab
+ echo "mount -o remount,rw /live/media" >> /slroot/live/union/etc/rc.d/rc.S
+-if [ "$fastboot" == "yes" ]; then #faster startup (actions already done by "build-slackware-live.sh --sysprep")
+-	sed	-e 's@\(.*/usr/bin/fc-cache -f.*\)@  : #\1@' \
+-		-e 's@\(.*rc.udev start\)@      : #\1@' \
+-		-e 's@\(.*icon.*${theme_dir}.*\)@      : #\1@' \
+-		-e 's@\(.*/usr/bin/update.*--verbose\)@  : #\1@' \
+-		-e 's@\(.*/usr/bin/update-mime-database /usr/share/mime\)@  : #\1@' \
+-		-e 's@^\(.*/sbin/ldconfig &\)$@  : #\1@' \
++if [ "$fastboot" = "yes" ]; then #faster startup (actions already done by "build-slackware-live.sh --sysprep")
++	echo "Enabling fast boot"
++	sed	-e 's@^\( */usr/bin/fc-cache.*\)$@: #\1@' \
++		-e 's@^\( */bin/sh /etc/rc.d/rc.udev\)$@: #\1@' \
++		-e 's@^\( */usr/bin/gtk-update.*\)$@: #\1@' \
++		-e 's@^\( */usr/bin/update-gdk.*\)$@: #\1@' \
++		-e 's@^\( */usr/bin/update-gtk.*\)$@: #\1@' \
++		-e 's@^\( */usr/bin/update-mime-database.*\)$@: #\1@' \
++		-e 's@^\( */usr/bin/update-pango.*\)$@: #\1@' \
++		-e 's@^\( */usr/bin/glib-compile-schemas.*\)$@: #\1@' \
++		-e 's@^\( */sbin/ldconfig.*\)$@: #\1@' \
+ 		-i /slroot/live/union/etc/rc.d/rc.M
+-	sed	-e 's@^\(.*\)\(/sbin/depmod .*\)$@\1: #\2@' \
+-		-e 's@\(.*\)\(NEWMODS=.*\)@\1: #\2@' \
++	sed	-e 's@^\( */sbin/depmod.*\)$@: #\1@' \
+ 		-i /slroot/live/union/etc/rc.d/rc.modules
+ fi
+-if [ -x /slroot/live/union/etc/rc.d/rc.fuse ]; then
+-	chmod a-x /slroot/live/union/etc/rc.d/rc.fuse
+-fi
+-if [ "$mediadetected" == "nfs" ] && [ -x /slroot/live/union/etc/rc.d/rc.networkmanager ]; then 
++if [ "$mediadetected" = "nfs" ] && [ -x /slroot/live/union/etc/rc.d/rc.networkmanager ]; then 
+ 	chmod -x /slroot/live/union/etc/rc.d/rc.networkmanager #if enabled, system hangs
++else
++	chmod +x /slroot/live/union/etc/rc.d/rc.networkmanager
+ fi
+ 
+ #system shutdown tweaking
+-if [ ! -z "$changes" ]; then
+-	cp -f /slroot/live/system/etc/rc.d/rc.6 /slroot/live/union/etc/rc.d/
+-fi
++#if [ ! -z "$changes" ]; then
++	#cp -f /slroot/live/system/etc/rc.d/rc.6 /slroot/live/union/etc/rc.d/
++#fi
+ sed -i 's/\(\/rc.[06]\)\( fast\)*/\1 fast/' /slroot/live/union/etc/inittab #to prevent system hang at shutdown
+-sed 	-e 's@^\( *\)\([a-z/]*sleep.*\)@\1: #\2@' \
++sed -e 's@^\( *\)\([a-z/]*sleep.*\)@\1: #\2@' \
+ 	-e 's@^\( *\)\([a-z/]*sync\)@\1: #\2@' \
+ 	-e 's@^\(.*umount.*\)$@\1 \>/dev/null 2\>\&1@' \
+ 	-i /slroot/live/union/etc/rc.d/rc.6
++sed -e 's@^\(.*umount -v -a -t no,proc,sysfs.*\)$@umount -v -a -t no,overlay,unionfs,proc,sysfs \>/dev/null 2\>\&1@' -i /slroot/live/union/etc/rc.d/rc.6
++sed -e 's@^\(.*umount -v -a -l -f -r -t nfs,smbfs,cifs.*\)$@umount -v -a -l -f -r -t nfs,smbfs,cifs \>/dev/null 2\>\&1@' -i /slroot/live/union/etc/rc.d/rc.6
++sed -e 's@^\(.*umount -v -a -t no,proc,sysfs.*\)$@umount -v -a -t no,proc,sysfs \>/dev/null 2\>\&1@' -i /slroot/live/union/etc/rc.d/rc.6
++
+ if [ -z "$changes" ]
+-then sed -e 's@^\(.*-o remount.*\)$@mount -o remount,ro /live/media #\1\n/bin/sync\n/bin/sleep 3@' -i /slroot/live/union/etc/rc.d/rc.6
+-else sed -e 's@^\(.*-o remount.*\)$@mount -o remount,ro /live/media\nmount -o remount,ro /live/changes #\1\nsync; sleep 3@' \
++then sed -e 's@^\(.*-o remount.*\)$@/bin/mount -o remount,ro /live/media \>/dev/null 2\>\&1 #\1\n/bin/sync\n/bin/sleep 3@' -i /slroot/live/union/etc/rc.d/rc.6
++else sed -e 's@^\(.*-o remount.*\)$@/bin/mount -o remount,ro /live/media \>/dev/null 2\>\&1\nmount -o remount,ro /live/changes \>/dev/null 2\>\&1 #\1\nsync; sleep 3@' \
+ 	-i /slroot/live/union/etc/rc.d/rc.6
+ fi
+-if [ "$mediadetected" == "nfs" ]; then
++if [ "$mediadetected" = "nfs" ]; then
+ 	sed -e 's@^\( *\)\([a-z/]*fuser.*\)@\1: #\2@' \
+ 		-e 's@^\( *\)\([a-z/]*dhcpcd -k.*\)@\1: #\2@' \
+ 		-e 's@^\( *\)\(\. /etc/rc\.d/rc\.inet1 stop\)@\1: #\2@' \
+ 		-e 's@-t \(nfs,\)\(.*\)@-t \2 #\1@' \
+ 		-i /slroot/live/union/etc/rc.d/rc.6
+ fi
+-if [ "$mediadetected" == "cd" ] && [ ! "$copy2ram" == "yes" ]; then
++if [ "$mediadetected" = "cd" ] && [ ! "$copy2ram" = "yes" ]; then
+ 	sed	-e "s@\(/sbin/reboot\)@reboot -w; shutdown -k now \>/dev/null\n  cdrecord --eject dev=$livedevice \>/dev/null 2\>\&1\n  sleep 5\n  \1@" \
+ 		-e "s@\(/sbin/poweroff\)@poweroff -w; shutdown -k now \>/dev/null\n  cdrecord --eject dev=$livedevice \>/dev/null 2\>\&1\n  sleep 5\n  \1@" \
+ 		-i /slroot/live/union/etc/rc.d/rc.6
+@@ -247,6 +279,7 @@
+ 
+ #setup persistent homedir
+ if [ ! -z "$home" ] && [ ! "$copy2ram" == "yes" ] && [ "$mediadetected" != "cd" ]; then
++	echo "Setting up persistent home directory ($home)"
+ 	uid=1000
+ 	if [ -z "`grep "^[^:]\+:x:$uid:" /slroot/live/union/etc/passwd | cut -f1 -d:`" ]; then
+ 		uid=0
+@@ -254,44 +287,41 @@
+ 	homedir=`grep "x:$uid:" /slroot/live/union/etc/passwd | cut -f6 -d:`
+ 	gid=`grep "x:$uid:" /slroot/live/union/etc/passwd | cut -f4 -d:`
+ 	if [ "$mediadetected" == "sd" ]; then
+-		if  [ ! -b $home ]; then
+-			mount -o remount,rw /slroot/live/media
+-		fi
+ 		if echo $home | grep -q "="; then
+ 			filesize=`echo "$home" | cut -f2 -d=`
  			home=`echo "$home" | cut -f1 -d=`
  		fi
- 		if [ ! -d /slroot/live/media/$home ] && [ ! -f /slroot/live/media/$home ] && [ ! -b $home ]; then #storage space creation
+-		if [ ! -d /slroot/live/media/$home ] && [ ! -f /slroot/live/media/$home ] && [ ! -b $home ]; then #storage space creation
 -			if  [ ! -z "$filesize" ]; then
 -				echo "Creating $home ($filesize MB) persistent home directory ..."
 -				dd if=/dev/zero of=/slroot/live/media/$home bs=1024k count=0 seek=$filesize #TODO: check available space
@@ -927,6 +1292,22 @@ diff -Naur slackware-live-0.4.5.orig/scripts/init slackware-live-0.4.5/scripts/i
 -				umount /slroot/$homedir
 -			else
 -				#if mount | grep -q "$livedevice on /slroot/live/media type ext3"; then #TODO: check FS type (vfat not supported)
+-				mkdir -p /slroot/live/media/$home
+-				cp -dpR /slroot/live/union/etc/skel/.??* /slroot/live/media/$home/
+-				cp -dpR /slroot/live/union/etc/skel/* /slroot/live/media/$home/
+-				chown -R $uid:$gid /slroot/live/media/$home
+-				#fi
+-			fi
+-		fi
+-		if [ -d /slroot/live/media/$home ] || [ -f /slroot/live/media/$home ] || [ -b $home ]; then
+-			echo "Setting up persistent home directory ($home)"
+-			if [ -b $home ]; then
+-				mount $home /slroot/$homedir
+-			else
+-				if [ -d /slroot/live/media/$home ]
+-				then mount --bind /slroot/live/media/$home /slroot/$homedir
+-				else mount -o loop /slroot/live/media/$home /slroot/$homedir
++		if [ ! -d /slroot/live/media/$home ] && [ ! -f /slroot/live/media/$home ]; then #storage space creation
 +			#if  [ ! -z "$filesize" ]; then
 +			#	echo "Creating $home ($filesize MB) persistent home directory ..."
 +			#	dd if=/dev/zero of=/slroot/live/media/$home bs=1024k count=0 seek=$filesize #TODO: check available space
@@ -940,27 +1321,62 @@ diff -Naur slackware-live-0.4.5.orig/scripts/init slackware-live-0.4.5/scripts/i
 +			#	umount /slroot/$homedir
 +			#else
 +				if mount | grep -q "$livedevice on /slroot/live/media type ext3"; then #TODO: check FS type (vfat not supported)
- 				mkdir -p /slroot/live/media/$home
- 				cp -dpR /slroot/live/union/etc/skel/.??* /slroot/live/media/$home/
- 				cp -dpR /slroot/live/union/etc/skel/* /slroot/live/media/$home/
- 				chown -R $uid:$gid /slroot/live/media/$home
--				#fi
++					mount -o remount,rw /slroot/live/media
++					mkdir -p /slroot/live/media/$home
++					cp -dpR /slroot/live/union/etc/skel/.??* /slroot/live/media/$home/
++					cp -dpR /slroot/live/union/etc/skel/* /slroot/live/media/$home/
++					chown -R $uid:$gid /slroot/live/media/$home
+ 				fi
 -			fi
-+				fi
 +			#fi
++		fi
++		
++		if [ -f /slroot/live/media/$home ];	then # home directory in persistent file 
++			mount -o remount,rw /slroot/live/media
++			mount -o loop /slroot/live/media/$home /slroot/live/media/$homedir
++		fi
++		if [ -d /slroot/live/media/$home ]; then # persistent home directory
++			mount -o remount,rw /slroot/live/media
++			mkdir -p /slroot/live/media/$home
++			mount --bind /slroot/live/media/$home /slroot/$homedir;
  		fi
- 		if [ -d /slroot/live/media/$home ] || [ -f /slroot/live/media/$home ] || [ -b $home ]; then
- 			echo "Setting up persistent home directory ($home)"
-@@ -308,7 +324,7 @@
- #autologin
+ 	else
+ 		echo "Setting up persistent home directory ($home)"
+@@ -299,22 +329,25 @@
+ 	fi
+ fi
+ 
+-#runlevel boot parameter handling 
++#runlevel boot parameter handling
+ if [ ! -z "$runlevel" ]; then
+ 	echo "Setting up runlevel ($runlevel)"
+ 	sed -i s/^id:[1-5]:initdefault:$/id:$runlevel:initdefault:/ /slroot/live/union/etc/inittab
+ fi
+ 
+-#autologin
++#autologin (runlevel 5)
  runlevel=`cat /slroot/live/union/etc/inittab | sed -n /^id:[1-5]:initdefault:$/p | cut -f2 -d:`
- if [ $runlevel == 5 ]; then
+-if [ $runlevel == 5 ]; then
 -	sed -i 's/^c1:.*$/c1:5:respawn:\/sbin\/agetty -a linomad 38400 tty1 linux/' /slroot/live/union/etc/inittab
-+	sed -i 's/^c1:.*$/c1:5:respawn:\/sbin\/agetty -a one 38400 tty1 linux/' /slroot/live/union/etc/inittab
++if [ $runlevel = 5 ]; then
++	login=`cat /slroot/live/union/etc/passwd | grep ":1000:" | cut -f1 -d:`
++	if [ -z "$login" ]; then login="root"; fi
++	echo "Setting up autologin (login=$login)"
++	sed -i "s/^c1:.*$/c1:5:respawn:\/sbin\/agetty -a $login 38400 tty1 linux/" /slroot/live/union/etc/inittab
  	
  	if [ -x /slroot/live/union/usr/bin/startx ]; then
- 		cat  > /slroot/live/union/etc/profile.d/x.sh << END
-@@ -328,30 +344,65 @@
+-		cat  > /slroot/live/union/etc/profile.d/x.sh << END
+-if [ -z "\$DISPLAY" ] && [ "\`id -u\`" != "0" ] && [ "\`tty\`" == "/dev/tty1" ]; then
+-	startx
+-	logout
++	cat  > /slroot/live/union/etc/profile.d/x.sh << END
++if [ -z "\$DISPLAY" ] && [ "\`id -u\`" != "0" ] && [ "\`tty\`" = "/dev/tty1" ]; then
++startx
++logout
+ fi
+ END
+ 		chmod +x /slroot/live/union/etc/profile.d/x.sh
+@@ -328,30 +361,67 @@
  	then sed -i s/^export\ LANG=.*/export\ LANG=$locale/ /slroot/live/union/etc/profile.d/lang.sh
  	else echo "export LANG=$locale" >> /slroot/live/union/etc/profile.d/lang.sh
  	fi
@@ -968,13 +1384,15 @@ diff -Naur slackware-live-0.4.5.orig/scripts/init slackware-live-0.4.5/scripts/i
 +      locale_noutf8=$(echo $locale | sed 's/\.utf8//')
 +      sed -i "s/\(^\|^#\)Language=.*/Language=$locale_noutf8/" /slroot/live/union/etc/kde/kdm/kdmrc
 +    fi    
-+    # Make firefox match OS locale
++    LIBSUFFIX=
++	[ -d /slroot/live/union/usr/lib64 ] && LIBSUFFIX=64
++  # Make firefox match OS locale
 +  # Now included in $DISTRONAME version, but keep it for other Slackware version or distro
 +  #if [ -w /slroot/live/union/usr/lib$LIBSUFFIX/firefox/greprefs/all.js ]; then
 +  # sed -i -e 's/pref("intl.locale.matchOS", false);/pref("intl.locale.matchOS", true);/g' /slroot/live/union/usr/lib$LIBSUFFIX/firefox/greprefs/all.js
 +  #fi
 +  if [ -w /slroot/live/union/usr/lib$LIBSUFFIX/firefox-*/defaults/pref/langpacks.js ]; then
-+    sed -i -e 's/pref("intl.locale.matchOS", false);/pref("intl.locale.matchOS", true);/g' /slroot/live/union/usr/lib$LIBSUFFIX/firefox-*/defaults/pref/langpacks.js
++	sed -i -e 's/pref("intl.locale.matchOS", false);/pref("intl.locale.matchOS", true);/g' /slroot/live/union/usr/lib$LIBSUFFIX/firefox-*/defaults/pref/langpacks.js
 +  fi
 +  # Make thunderbird match OS locale
 +  # Now included in $DISTRONAME version, but keep it for other Slackware version or distro
@@ -1044,7 +1462,27 @@ diff -Naur slackware-live-0.4.5.orig/scripts/init slackware-live-0.4.5/scripts/i
  fi
  
  if [ ! -z "$tz" ]; then
-@@ -385,9 +436,9 @@
+@@ -373,23 +443,36 @@
+ fi
+ 
+ #detect fixed partitions
+-for partition in /sys/block/sd?/sd*; do
+-	device=`echo $partition | cut -f4 -d/`
+-	partition=`echo $partition | cut -f5 -d/`
+-	if [ "$partition" != "sd*" ] && [ "`cat /sys/block/$device/removable`" == "0" ]; then
+-		if swapon /dev/$partition >/dev/null 2>/dev/null; then
+-			swapoff /dev/$partition
+-			if [ "$useswap" == "yes" ]; then
++blkid | while read line; do
++	partition=`echo $line | cut -f1 -d: | cut -c 6-`
++	device=`echo $partition | cut -c1-3`
++	type=`echo $line | sed 's/^.*TYPE=\"\([^\"]*\)\".*$/\1/'`
++	loopdevice=`echo $partition | cut -c-4`
++	if [ "$loopdevice" != "loop" ] && [ "`cat /sys/block/$device/removable`" = "0" ]; then
++		if [ "$type" = "swap" ]; then
++			if [ "$useswap" = "yes" ]; then
+ 				echo "Enabling swap on /dev/$partition"
+ 				echo "/dev/$partition none swap defaults 0 0" >> /slroot/live/union/etc/fstab
  			else
  				echo "/dev/$partition none swap defaults,noauto 0 0" >> /slroot/live/union/etc/fstab
  			fi
@@ -1052,8 +1490,36 @@ diff -Naur slackware-live-0.4.5.orig/scripts/init slackware-live-0.4.5/scripts/i
 -			echo "/dev/$partition /mnt/$partition auto defaults,noauto,user 0 0" >> /slroot/live/union/etc/fstab
 -			mkdir -p /slroot/live/union/mnt/$partition
 +		#else
-+		#	echo "/dev/$partition /mnt/$partition auto defaults,noauto,user 0 0" >> /slroot/live/union/etc/fstab
++		#	echo "Detected /dev/$partition ($type)"
++		#	echo "/dev/$partition /mnt/$partition $type defaults,noauto,user 0 0" >> /slroot/live/union/etc/fstab
 +		#	mkdir -p /slroot/live/union/mnt/$partition
++		elif [ "$type" = "vfat" ] && [ "$LIBSUFFIX" = "64" ]; then
++				mkdir -p /slroot/live/union/boot/efi
++			    mount -t vfat /dev/$partition /slroot/live/union/boot/efi 2>/dev/null
++				if [ -d /slroot/live/union/boot/efi/EFI ]; then
++					echo "Adding EFI partition /dev/$partition to /etc/fstab"
++					echo "/dev/$partition /boot/efi vfat defaults 1 0" >> /slroot/live/union/etc/fstab
++				    umount /slroot/live/union/boot/efi 2>/dev/null
++				else
++					umount /slroot/live/union/boot/efi 2>/dev/null
++					rm -rf /slroot/live/union/boot/efi
++				fi
  		fi
- 	fi
+-	fi
++	fi	
  done
+ 
+ #setup root password
+@@ -404,10 +487,7 @@
+ umount /proc
+ umount /sys
+ mount -r -o remount /slroot 2>/dev/null #remount root directory read-only for normal startup
+-sed -i 's/READWRITE=yes/:/' /slroot/etc/rc.d/rc.S 2>/dev/null #aufs doesn't allow remounting (claiming it is busy)
++
+ echo "*** Live system ready ***"
+-if [ ! -z "$debug" ]; then
+-	sleep $debug
+-fi
+ echo ""
+-exec switch_root /slroot /sbin/init
++exec switch_root /slroot /sbin/init || exec sh
