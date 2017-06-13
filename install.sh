@@ -1,7 +1,7 @@
 #!/bin/sh
 
 cd $(dirname $0)
-VER=0.4
+VER=0.5.3
 
 (
  cd src/slackware-live-$VER
