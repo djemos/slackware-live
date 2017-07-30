@@ -1,10 +1,9 @@
 diff -Naur slackware-live-0.5.3.orig/doc/AUTHORS slackware-live-0.5.3/doc/AUTHORS
 --- slackware-live-0.5.3.orig/doc/AUTHORS	2016-07-23 13:43:45.245305000 +0300
-+++ slackware-live-0.5.3/doc/AUTHORS	2017-07-30 23:12:28.515036099 +0300
++++ slackware-live-0.5.3/doc/AUTHORS	2017-07-30 23:22:25.049049221 +0300
 @@ -1,5 +1,6 @@
  Developpers:
--- Dimitris Tzemos <dijemos@gmail.com> (corrections for slackel,salix)
-+- Dimitris Tzemos <dijemos@gmail.com> (corrections for slackel,salix, add encryption persistent support)
+ - Dimitris Tzemos <dijemos@gmail.com> (corrections for slackel,salix)
 +- Eric Hameleers <alien@slackware.com> (encryption support)
  - Frank Endres <frankendres@tuxfamily.org>
  - Sebastian Reisse <sebastian.j.reisse@gmx.net>
