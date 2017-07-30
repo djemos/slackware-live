@@ -8,11 +8,31 @@ diff -Naur slackware-live-0.5.3.orig/doc/AUTHORS slackware-live-0.5.3/doc/AUTHOR
  - Frank Endres <frankendres@tuxfamily.org>
  - Sebastian Reisse <sebastian.j.reisse@gmx.net>
  
+diff -Naur slackware-live-0.5.3.orig/doc/COPYING slackware-live-0.5.3/doc/COPYING
+--- slackware-live-0.5.3.orig/doc/COPYING	2014-02-06 20:06:57.000000000 +0200
++++ slackware-live-0.5.3/doc/COPYING	2017-07-30 23:45:34.291079780 +0300
+@@ -1,3 +1,5 @@
++- Dimitris Tzemos <dijemos@gmail.com> (corrections for slackel,salix)
++- Eric Hameleers <alien@slackware.com> (encryption support)
+ Slackware-Live, Copyright Frank Endres, 2010-2014
+ 
+ This software is governed by the CeCILL license under french 
+diff -Naur slackware-live-0.5.3.orig/doc/ChangeLog slackware-live-0.5.3/doc/ChangeLog
+--- slackware-live-0.5.3.orig/doc/ChangeLog	2016-07-23 13:39:20.968785000 +0300
++++ slackware-live-0.5.3/doc/ChangeLog	2017-07-30 23:46:21.525080819 +0300
+@@ -1,4 +1,5 @@
+ 2015-10-11: Slackware-Live-0.4.5:
++	+ Eric Hameleers <alien@slackware.com> (encryption support)
+ 	+ added support to format partitions using different filesystems (btrfs,ext2,ext3,ext4,reiserfs,jfs,xfs) by [Dimitris Tzemos <dijemos@gmail.com>]
+ 2015-01-15: Slackware-Live-0.4.3: fixed EFI installation
+ 	+ fixed fstab (added /dev/shm tmpfs, needed for Chromium Web browser for example)
 diff -Naur slackware-live-0.5.3.orig/doc/README slackware-live-0.5.3/doc/README
 --- slackware-live-0.5.3.orig/doc/README	2014-02-06 20:12:04.000000000 +0200
-+++ slackware-live-0.5.3/doc/README	2016-11-07 21:33:49.596295421 +0200
-@@ -1,9 +1,9 @@
++++ slackware-live-0.5.3/doc/README	2017-07-30 23:49:14.073084615 +0300
+@@ -1,9 +1,11 @@
  Slackware Live is a live DVD/USB/NFS build and install tool written for Slackware (& Slackware64) Linux:
++- Dimitris Tzemos <dijemos@gmail.com> (corrections for slackel,salix)
++- Eric Hameleers <alien@slackware.com> (encryption support)
  - support GPT and legacy MBR partitionned disks, UEFI and CSM (legacy / BIOS) booting
  - contains all the necessary to convert an installed system to a live system and vice-versa;
 -- it doesn't need any kernel recompile, but it support seamlessly AUFS and SquashFS-XZ/LZMA if your kernel support them;
