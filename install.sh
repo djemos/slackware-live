@@ -1,5 +1,4 @@
 #!/bin/sh
-
 cd $(dirname $0)
 VER=0.5.3
 
