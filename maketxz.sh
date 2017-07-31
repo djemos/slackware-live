@@ -1,5 +1,4 @@
 #!/bin/sh
-
 cd $(dirname $0)
 mkdir -p pkg
 export DESTDIR=$PWD/pkg
