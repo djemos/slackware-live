@@ -1,5 +1,4 @@
 Slackware Live is a live DVD/USB/NFS build and install tool written for Slackware (& Slackware64) Linux:
-
 - support GPT and legacy MBR partitionned disks, UEFI and CSM (legacy / BIOS) booting
 - contains all the necessary to convert an installed system to a live system and vice-versa;
 - it doesn't need any kernel recompile, (using overlayfs);
