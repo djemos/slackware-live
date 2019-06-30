@@ -3,8 +3,8 @@ cd $(dirname $0)
 mkdir -p pkg
 export DESTDIR=$PWD/pkg
 ./install.sh
-VER=0.5.3
-RLZ=1dj
+VER=0.5.4
+RLZ=2dj
 cd pkg
 
 cat <<EOF > install/slack-desc
