@@ -45,7 +45,7 @@ diff -Naur slackware-live-0.5.4.orig/doc/README slackware-live-0.5.4/doc/README
 +A GUI for the installation program (SLI) is provided separately.
 diff -Naur slackware-live-0.5.4.orig/scripts/build-slackware-live.sh slackware-live-0.5.4/scripts/build-slackware-live.sh
 --- slackware-live-0.5.4.orig/scripts/build-slackware-live.sh	2014-02-11 22:32:24.000000000 +0200
-+++ slackware-live-0.5.4/scripts/build-slackware-live.sh	2019-06-28 18:26:56.628252098 +0300
++++ slackware-live-0.5.4/scripts/build-slackware-live.sh	2020-06-22 21:16:59.078356257 +0300
 @@ -1,4 +1,12 @@
  #!/bin/sh
 +#Dimitris Tzemos <dijemos@gmail.com> (changes for slackel,salix)
@@ -180,7 +180,7 @@ diff -Naur slackware-live-0.5.4.orig/scripts/build-slackware-live.sh slackware-l
 +#EOF
 +#		fi
 +		#dd if=/dev/zero of=/tmp/efi.img bs=1k count=32768
-+		dd if=/dev/zero of=/tmp/efi.img bs=1M count=20
++		dd if=/dev/zero of=/tmp/efi.img bs=1M count=30
  		mkdosfs -n "EFIBOOT" /tmp/efi.img
  		mount -o loop /tmp/efi.img /mnt/floppy
  		cp -dpR $livedirectory/EFI /mnt/floppy/
