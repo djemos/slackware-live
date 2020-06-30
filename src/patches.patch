@@ -45,7 +45,7 @@ diff -Naur slackware-live-0.5.4.orig/doc/README slackware-live-0.5.4/doc/README
 +A GUI for the installation program (SLI) is provided separately.
 diff -Naur slackware-live-0.5.4.orig/scripts/build-slackware-live.sh slackware-live-0.5.4/scripts/build-slackware-live.sh
 --- slackware-live-0.5.4.orig/scripts/build-slackware-live.sh	2014-02-11 22:32:24.000000000 +0200
-+++ slackware-live-0.5.4/scripts/build-slackware-live.sh	2020-06-22 21:16:59.078356257 +0300
++++ slackware-live-0.5.4/scripts/build-slackware-live.sh	2020-06-30 10:19:01.111986704 +0300
 @@ -1,4 +1,12 @@
  #!/bin/sh
 +#Dimitris Tzemos <dijemos@gmail.com> (changes for slackel,salix)
@@ -658,7 +658,7 @@ diff -Naur slackware-live-0.5.4.orig/scripts/build-slackware-live.sh slackware-l
  		kv=`basename /mnt/install/lib/modules/*`
  		if lsmod | grep -q $SYSINSTALLFS; then
  			moduleslist="$SYSINSTALLFS"
-@@ -445,16 +727,17 @@
+@@ -445,16 +727,28 @@
  		done
  		moduleslist=`echo $moduleslist | sed 's/:$//'`
  		if [ ! -z "$moduleslist" ] && [ "$moduleslist" != "sg" ]; then
@@ -669,6 +669,17 @@ diff -Naur slackware-live-0.5.4.orig/scripts/build-slackware-live.sh slackware-l
 +			#chroot /mnt/install umount /proc
  		fi
  	fi
++		
++	#####
++     installdevice=`echo $systempart | cut -c1-8`
++     if [ "$installdevice" != "/dev/sda" ]; then 
++		echo "Setting initrd"
++		kv=`basename /mnt/install/lib/modules/*`
++		MODULES="loop:xhci-pci:ohci-pci:ehci-pci:xhci-hcd:uhci-hcd:ehci-hcd:mmc-core:mmc-block:sdhci:sdhci-pci:sdhci-acpi:usb-storage:hid:usbhid:i2c-hid:hid-generic:hid-apple:hid-asus:hid-cherry:hid-logitech:hid-logitech-dj:hid-logitech-hidpp:hid-lenovo:hid-microsoft:hid_multitouch:crc32c-intel:fuse"
++		chroot /mnt/install mkinitrd -c -o /boot/initrd.gz -f $SYSINSTALLFS -r $systempart -k $kv -m $MODULES
++		chroot /mnt/install rm -rf /boot/initrd-tree/
++     fi
++     #####
  	#InitRD end
 -	
 +   if [ "$bootloader" == "lilo" ]; then
@@ -679,7 +690,7 @@ diff -Naur slackware-live-0.5.4.orig/scripts/build-slackware-live.sh slackware-l
  		if [ -d /sys/firmware/efi ]; then #UEFI
  			modprobe efivars
  			efipartnum=`gdisk -l $installdevice | grep "EF00" | sed 's/  \+/ /g' | cut -f2 -d' '`
-@@ -462,7 +745,7 @@
+@@ -462,7 +756,7 @@
  			if [ ! -z "$efipartition" ]; then
  				mkdir -p /mnt/efi
  				mount $efipartition /mnt/efi
@@ -688,7 +699,7 @@ diff -Naur slackware-live-0.5.4.orig/scripts/build-slackware-live.sh slackware-l
  				if [ -d /mnt/efi/EFI/$efilabel ]; then
  					conflictpart=`cat /mnt/efi/EFI/$efilabel/elilo.conf | grep "append" | sed 's/.*root=\([^ ]*\).*/\1/'`
  					if [ "$conflictpart" == "$systempart" ]
-@@ -476,10 +759,10 @@
+@@ -476,27 +770,37 @@
  				cp /mnt/install/boot/vmlinuz /mnt/efi/EFI/$efilabel/
  				cat > /mnt/efi/EFI/$efilabel/elilo.conf << EOF
  timeout=1
@@ -701,7 +712,19 @@ diff -Naur slackware-live-0.5.4.orig/scripts/build-slackware-live.sh slackware-l
      append="root=$systempart ro"
  	read-only
  EOF
-@@ -489,14 +772,14 @@
++
++				#####
++				if [ "$installdevice" != "/dev/sda" ]; then
++					if [ "$installdevice" != "/dev/sdb" ]; then
++						real_device=`echo $installdevice | cut -c6-8`
++						sed -i "s/$real_device/sdb/g" /mnt/efi/EFI/$efilabel/elilo.conf
++					fi
++				fi
++				#####
++				
+ 				if [ -f /mnt/install/boot/initrd.gz ]; then
+ 					echo "  initrd=initrd.gz" >> /mnt/efi/EFI/$efilabel/elilo.conf
+ 					cp /mnt/install/boot/initrd.gz /mnt/efi/EFI/$efilabel/
  				fi
  				umount /mnt/efi
  				rmdir /mnt/efi
@@ -719,7 +742,7 @@ diff -Naur slackware-live-0.5.4.orig/scripts/build-slackware-live.sh slackware-l
  bmp-colors = 255,0,255,0,255,0
  bmp-table = 60,6,1,16
  bmp-timer = 65,27,0,255
-@@ -514,7 +797,7 @@
+@@ -514,9 +818,10 @@
  
  image = /boot/vmlinuz
  root = $systempart
@@ -727,8 +750,11 @@ diff -Naur slackware-live-0.5.4.orig/scripts/build-slackware-live.sh slackware-l
 +label = $SLACKEL_FLAVOR_LILO
  read-only
  EOF
++			
  			if [ -f /mnt/install/boot/initrd.gz ]; then
-@@ -529,16 +812,255 @@
+ 				echo "initrd = /boot/initrd.gz" >> /mnt/install/etc/lilo.conf
+ 			fi
+@@ -529,16 +834,285 @@
  table = $installdevice
  EOF
  			fi
@@ -739,6 +765,15 @@ diff -Naur slackware-live-0.5.4.orig/scripts/build-slackware-live.sh slackware-l
 +			#chroot /mnt/install umount /proc
 +		fi
 +	fi
++	
++	#####
++		if [ "$installdevice" != "/dev/sda" ]; then
++			if [ "$installdevice" != "/dev/sdb" ]; then
++				real_device=`echo $installdevice | cut -c6-8`
++				sed -i "s/$real_device/sdb/g" /mnt/install/etc/lilo.conf
++			fi
++		fi
++	#####
 +   fi #LiLo end
 +  
 +   if [ "$bootloader" == "grub" ]; then
@@ -784,6 +819,16 @@ diff -Naur slackware-live-0.5.4.orig/scripts/build-slackware-live.sh slackware-l
 +		chroot /mnt/install grub-mkconfig -o /boot/grub/grub.cfg
 +		#for dir in sys proc dev; do umount /mnt/install/$dir; done
 +	fi
++		#####
++		if [ "$installdevice" != "/dev/sda" ]; then
++			if [ "$installdevice" != "/dev/sdb" ]; then
++				real_device=`echo $installdevice | cut -c6-8`
++				sed -i "s/$real_device/sdb/g" /mnt/install/boot/grub/grub.cfg
++				sed -i "s/hd2/hd1/g" /mnt/install/boot/grub/grub.cfg
++				sed -i "s/ahci2/ahci1/g" /mnt/install/boot/grub/grub.cfg
++			fi
++		fi
++		#####
 +   fi # end grub
 +	
 +	liveuser=$(cat /etc/passwd | grep /bin/bash | grep /home/| cut -d : -f 1)
@@ -972,6 +1017,17 @@ diff -Naur slackware-live-0.5.4.orig/scripts/build-slackware-live.sh slackware-l
 +      echo "$SWAPD  swap  swap defaults  0  0" >> /mnt/install/etc/fstab
 +    done
 +
++	  #####
++		if [ "$installdevice" != "/dev/sda" ]; then
++			if [ "$installdevice" != "/dev/sdb" ]; then
++				real_device=`echo $installdevice | cut -c6-8`
++				sed -i "s/$real_device/sdb/g" /mnt/install/etc/fstab
++				sed -i "s/$real_device/sdb/g" /mnt/install/etc/mtab
++			fi
++		fi
++	   #####
++
++
 +	for dir in sys proc dev; do umount /mnt/install/$dir; done
 +
 +	if [ "$home_dir" != "" ] && [ "$home_dir" != "$systempart" ]; then
@@ -988,7 +1044,7 @@ diff -Naur slackware-live-0.5.4.orig/scripts/build-slackware-live.sh slackware-l
  	return 0
  }
  
-@@ -659,7 +1181,11 @@
+@@ -659,7 +1233,11 @@
  	moduleslist=$4
  	if [ -d "$rootdirectory" ] && [ ! -z "$livedirectory" ]; then
  		if [ -z "$moduleslist" ]; then
@@ -1001,7 +1057,7 @@ diff -Naur slackware-live-0.5.4.orig/scripts/build-slackware-live.sh slackware-l
  		fi
  		init_live $rootdirectory $livedirectory $moduleslist
  	else
-@@ -730,6 +1256,17 @@
+@@ -730,6 +1308,17 @@
  	rootdirectory=$2
  	systempart=$3
  	loadersetup=$4
@@ -1019,7 +1075,7 @@ diff -Naur slackware-live-0.5.4.orig/scripts/build-slackware-live.sh slackware-l
  	if [ -d "$rootdirectory" ] && [ -b "$systempart" ]; then
  		systemsize=`du -s -m $rootdirectory | sed 's/\t.*//'`
  		device=`echo $systempart | cut -c6-8`
-@@ -741,11 +1278,14 @@
+@@ -741,11 +1330,14 @@
  			echo "error: insufficant space on device '$systempart'"
  			exit $INSUFFICIENTSPACE
  		else
@@ -1036,7 +1092,7 @@ diff -Naur slackware-live-0.5.4.orig/scripts/build-slackware-live.sh slackware-l
  		exit $CMDERROR
  	fi
  	;;
-@@ -780,7 +1320,7 @@
+@@ -780,7 +1372,7 @@
  	echo "`basename $0` --module root_dir live_dir module_file [-xz|-gzip] [-optional]"
  	echo "`basename $0` --iso live_dir iso_file"
  	echo "`basename $0` --usb live_dir device"
