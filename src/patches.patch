@@ -1,0 +1,2290 @@
+diff -Naur slackware-live-0.5.4.orig/doc/AUTHORS slackware-live-0.5.4/doc/AUTHORS
+--- slackware-live-0.5.4.orig/doc/AUTHORS	2016-07-23 13:43:45.245305000 +0300
++++ slackware-live-0.5.4/doc/AUTHORS	2017-07-30 23:22:25.000000000 +0300
+@@ -1,5 +1,6 @@
+ Developpers:
+ - Dimitris Tzemos <dijemos@gmail.com> (corrections for slackel,salix)
++- Eric Hameleers <alien@slackware.com> (encryption support)
+ - Frank Endres <frankendres@tuxfamily.org>
+ - Sebastian Reisse <sebastian.j.reisse@gmx.net>
+ 
+diff -Naur slackware-live-0.5.4.orig/doc/COPYING slackware-live-0.5.4/doc/COPYING
+--- slackware-live-0.5.4.orig/doc/COPYING	2014-02-06 20:06:57.000000000 +0200
++++ slackware-live-0.5.4/doc/COPYING	2017-07-30 23:45:34.000000000 +0300
+@@ -1,3 +1,5 @@
++- Dimitris Tzemos <dijemos@gmail.com> (corrections for slackel,salix)
++- Eric Hameleers <alien@slackware.com> (encryption support)
+ Slackware-Live, Copyright Frank Endres, 2010-2014
+ 
+ This software is governed by the CeCILL license under french 
+diff -Naur slackware-live-0.5.4.orig/doc/ChangeLog slackware-live-0.5.4/doc/ChangeLog
+--- slackware-live-0.5.4.orig/doc/ChangeLog	2016-07-23 13:39:20.968785000 +0300
++++ slackware-live-0.5.4/doc/ChangeLog	2017-07-30 23:46:21.000000000 +0300
+@@ -1,4 +1,5 @@
+ 2015-10-11: Slackware-Live-0.4.5:
++	+ Eric Hameleers <alien@slackware.com> (encryption support)
+ 	+ added support to format partitions using different filesystems (btrfs,ext2,ext3,ext4,reiserfs,jfs,xfs) by [Dimitris Tzemos <dijemos@gmail.com>]
+ 2015-01-15: Slackware-Live-0.4.3: fixed EFI installation
+ 	+ fixed fstab (added /dev/shm tmpfs, needed for Chromium Web browser for example)
+diff -Naur slackware-live-0.5.4.orig/doc/README slackware-live-0.5.4/doc/README
+--- slackware-live-0.5.4.orig/doc/README	2014-02-06 20:12:04.000000000 +0200
++++ slackware-live-0.5.4/doc/README	2017-07-30 23:49:14.000000000 +0300
+@@ -1,9 +1,11 @@
+ Slackware Live is a live DVD/USB/NFS build and install tool written for Slackware (& Slackware64) Linux:
++- Dimitris Tzemos <dijemos@gmail.com> (corrections for slackel,salix)
++- Eric Hameleers <alien@slackware.com> (encryption support)
+ - support GPT and legacy MBR partitionned disks, UEFI and CSM (legacy / BIOS) booting
+ - contains all the necessary to convert an installed system to a live system and vice-versa;
+-- it doesn't need any kernel recompile, but it support seamlessly AUFS and SquashFS-XZ/LZMA if your kernel support them;
++- it doesn't need any kernel recompile (using overlayfs);
+ - no changes are needed on the system to make live; the live system boots like an installed one (100% compatible with stock Slackware);
+ - support persistent changes;
+ - ...
+ 
+-A GUI for the installation program and a synchronization tool (for home directory backup/restore) are provided separately;
++A GUI for the installation program (SLI) is provided separately.
+diff -Naur slackware-live-0.5.4.orig/scripts/build-slackware-live.sh slackware-live-0.5.4/scripts/build-slackware-live.sh
+--- slackware-live-0.5.4.orig/scripts/build-slackware-live.sh	2014-02-11 22:32:24.000000000 +0200
++++ slackware-live-0.5.4/scripts/build-slackware-live.sh	2022-10-09 13:08:01.618673463 +0300
+@@ -1,4 +1,16 @@
+ #!/bin/sh
++#Dimitris Tzemos <dijemos@gmail.com> (changes for slackel,salix)
++# Eric Hameleers <alien@slackware.com> (encryption support)
++
++LIVELABEL="LIVE" #edit in init script too
++#SLACKEL_FLAVOR="Slackel-kde-7.6.0"
++#SLACKEL_FLAVOR_LILO="Slackel-kde"
++SLACKEL_FLAVOR="Slackel-openbox-7.6.0"
++SLACKEL_FLAVOR_LILO="Slackel-openbox"
++#SLACKEL_FLAVOR="Slackel-mate-7.6.0"
++#SLACKEL_FLAVOR_LILO="Slackel-mate"
++
++#LIVEFSOPTS="-O ^has_journal"
+ 
+ CMDERROR=1
+ PARTITIONERROR=2
+@@ -6,6 +18,11 @@
+ BOOTERROR=4
+ INSUFFICIENTSPACE=5
+ 
++if [ `uname -m` == "x86_64" ]
++then grublibdir="/usr/lib64/grub"
++else grublibdir="/usr/lib/grub"
++fi
++
+ function add_packages() {
+ 	packagesdirectory=$1
+ 	rootdirectory=$2
+@@ -50,27 +67,37 @@
+ 	fi
+ 
+ 	mount --bind /proc $rootdirectory/proc
+-	chroot $rootdirectory mkinitrd -c -o /tmp/initrd.gz -s /tmp/initrd-tree -k $kv -m $moduleslist >/dev/null 2>&1
++	chroot $rootdirectory mkinitrd -c -o /tmp/initrd.gz -s /tmp/initrd-tree -k $kv -m $moduleslist -C dummy >/dev/null 2>&1
+ 	cd $rootdirectory/tmp/initrd-tree
+ 	find . -name "*.ko"
+ 	cd - >/dev/null
+ 	umount $rootdirectory/proc
+ 	rm -f $rootdirectory/tmp/initrd.gz
+ 	rm -f $rootdirectory/tmp/initrd-tree/{initrd-name,keymap,luksdev,resumedev,rootfs,rootdev,wait-for-root}
+-	cp $initscriptbasepath/share/slackware-live/init $rootdirectory/tmp/initrd-tree/
++	cp $initscriptbasepath/share/slackware-live/{init,keymaps} $rootdirectory/tmp/initrd-tree/
+ 	chmod +x $rootdirectory/tmp/initrd-tree/init
+-	
++
+ 	cp $initscriptbasepath/sbin/build-slackware-live.sh $rootdirectory/tmp/initrd-tree/
+ 	
+-	for prg in unionfs mkfs.ext3; do
+-		cp `which $prg` $rootdirectory/tmp/initrd-tree/bin/ #UnionFS
+-		ldd `which $prg` | sed 's/[^\/]*\(\/[^ ]*\) .*/\1/' | sed 's/[^\/]*\(\/[^ ]*\) .*/\1/' | sed -n /^\\//p | sort -u | while read lib; do
++	#for prg in unionfs ; do
++	#	cp `which $prg` $rootdirectory/tmp/initrd-tree/bin/ #UnionFS
++	#	ldd `which $prg` | sed 's/[^\/]*\(\/[^ ]*\) .*/\1/' | sed 's/[^\/]*\(\/[^ ]*\) .*/\1/' | sed -n /^\\//p | sort -u | while read lib; do
++	#		if [ -d $rootdirectory/tmp/initrd-tree/lib64 ]
++	#		then cp $lib $rootdirectory/tmp/initrd-tree/lib64/
++	#		else cp $lib $rootdirectory/tmp/initrd-tree/lib/
++	#		fi
++	#	done
++	#done
++	unionfs=`which unionfs 2>/dev/null`
++	if [ ! -z "$unionfs" ]; then
++		cp $unionfs $rootdirectory/tmp/initrd-tree/bin/
++		ldd $unionfs | sed -n '/=>/p' | cut -f2 -d'>' | cut -f2 -d ' ' | while read lib; do
+ 			if [ -d $rootdirectory/tmp/initrd-tree/lib64 ]
+ 			then cp $lib $rootdirectory/tmp/initrd-tree/lib64/
+ 			else cp $lib $rootdirectory/tmp/initrd-tree/lib/
+ 			fi
+ 		done
+-	done
++	fi
+ 	
+ 	find $rootdirectory/tmp/initrd-tree/lib/modules/ -name "*.ko" | xargs strip --strip-unneeded
+ 	cwd=`pwd`
+@@ -86,18 +113,23 @@
+ 	#BIOS/syslinux
+ 	mkdir -p $livedirectory/boot/syslinux
+ 	cp /usr/share/syslinux/menu.c32 $livedirectory/boot/syslinux/
++	cp /usr/share/syslinux/vesamenu.c32 $livedirectory/boot/syslinux/
+ 	if [ ! -f  $livedirectory/boot/syslinux/syslinux.cfg ]; then
+ 		cat > $livedirectory/boot/syslinux/syslinux.cfg << EOF
+-prompt 1
+-timeout 10
+-default slackware
+-
+-label slackware
+-	kernel /boot/vmlinuz
+-	append max_loop=255 initrd=/boot/initrd.gz runlevel=5
++INCLUDE /boot/menus/mainmenu.cfg
+ EOF
+ 	fi
+ 	
++	#Copy menus,splash image
++	if [ -d menus ]; then
++		cp -r menus $livedirectory/boot/
++		cp slackel.png relinfo.msg $livedirectory/boot/syslinux/
++	fi
++	
++#	if [ -d install_on_usb ]; then
++#		cp install_on_usb/* $livedirectory/boot/syslinux/
++#	fi
++	
+ 	#UEFI/elilo
+ 	if [ `uname -m` == "x86_64" ]; then
+ 		mkdir -p $livedirectory/EFI/BOOT
+@@ -105,18 +137,25 @@
+ 		cp $livedirectory/boot/initrd.gz $livedirectory/EFI/BOOT/
+ 		cp $livedirectory/boot/vmlinuz $livedirectory/EFI/BOOT/
+ 		if [ ! -f $livedirectory/EFI/BOOT/elilo.conf ]; then
+-			cat > $livedirectory/EFI/BOOT/elilo.conf << EOF
+-prompt
+-timeout=10
+-default=slackware
+-
+-image=vmlinuz
+-	label=slackware
+-	initrd=initrd.gz
+-	append="max_loop=255 runlevel=5"
+-EOF
++			if [ -d ../common/elilo ]; then
++				cp ../common/elilo/* $livedirectory/EFI/BOOT/
++			fi	
+ 		fi
+-		dd if=/dev/zero of=/tmp/efi.img bs=1k count=16384
++		
++#		if [ ! -f $livedirectory/EFI/BOOT/elilo.conf ]; then
++#			cat > $livedirectory/EFI/BOOT/elilo.conf << EOF
++#prompt
++#timeout=10
++#default=$SLACKEL_FLAVOR
++#
++#image=vmlinuz
++#	label=$SLACKEL_FLAVOR
++#	initrd=initrd.gz
++#	append="max_loop=255 runlevel=4"
++#EOF
++#		fi
++		#dd if=/dev/zero of=/tmp/efi.img bs=1k count=32768
++		dd if=/dev/zero of=/tmp/efi.img bs=1M count=30
+ 		mkdosfs -n "EFIBOOT" /tmp/efi.img
+ 		mount -o loop /tmp/efi.img /mnt/floppy
+ 		cp -dpR $livedirectory/EFI /mnt/floppy/
+@@ -248,21 +287,53 @@
+ function create_iso() {
+ 	livedirectory=$1
+ 	imagefilename=$2
+-	
++	ISOHYBRID_MBR=/usr/share/syslinux/isohdpfx.bin
++
++	if [ ! -f $ISOHYBRID_MBR ]; then
++		echo "syslinux is not installed"
++		exit 1
++	fi
++
++	if [ ! -x /usr/bin/xorriso ]; then
++		echo "libisoburn is not installed"
++		exit 1
++	fi
+ 	cp /usr/share/syslinux/isolinux.bin $livedirectory/boot/syslinux/
+ 	if [ `uname -m` == "x86_64" ]; then
+-		altboot="-eltorito-alt-boot -no-emul-boot -eltorito-platform efi -eltorito-boot efi.img"
++		#UEFI_OPTS="-eltorito-alt-boot -no-emul-boot -eltorito-platform efi -eltorito-boot efi.img"
++		UEFI_OPTS="-eltorito-alt-boot -e efi.img -no-emul-boot"
+ 	fi
+-	mkisofs -J -d -N -l -r -V "Slackware-Live" -hide-rr-moved -o $imagefilename \
+-		-b boot/syslinux/isolinux.bin -boot-load-size 4 -boot-info-table -no-emul-boot \
+-		-c boot/syslinux/boot.catalog -hide boot.catalog -hide-joliet boot.catalog $altboot \
+-	   $livedirectory
++	#mkisofs -J -d -N -l -r -V "$LIVELABEL" -hide-rr-moved -o $imagefilename \
++	#	-b boot/syslinux/isolinux.bin -boot-load-size 4 -boot-info-table -no-emul-boot \
++	#	-c boot/syslinux/boot.catalog -hide boot.catalog -hide-joliet boot.catalog $altboot \
++	#   $livedirectory
++	
++	(
++	cd $livedirectory
++	
++	xorriso -as mkisofs \
++    -isohybrid-mbr $ISOHYBRID_MBR \
++    -isohybrid-gpt-basdat \
++    -hide-rr-moved \
++    -U \
++    -V "$LIVELABEL" \
++    -J \
++    -joliet-long \
++    -r \
++    -v -d -N \
++    -o $imagefilename \
++    -b boot/syslinux/isolinux.bin \
++    -c boot/syslinux/boot.catalog \
++    --boot-load-size 32 -boot-info-table -no-emul-boot $UEFI_OPTS \
++     .
++    )
+ }
+ 
+ 
+ function install_usb() {
+ 	livedirectory=$1
+ 	installmedia=$2
++	LIVEFS=$3
+ 	
+ 	device=`echo $installmedia | cut -c6-8`
+ 	sectorscount=`cat /sys/block/$device/size`
+@@ -273,15 +344,39 @@
+ 
+ 	if [ "$installdevice" == "$installmedia" ]; then #install on whole disk: partition and format media
+ 		if [ `uname -m` == "x86_64" ]; then #EFI/GPT
+-			partitionnumber=2
++			partitionnumber=1
+ 			installmedia="$installdevice$partitionnumber"
+ 			dd if=/dev/zero of=$installdevice bs=512 count=34 >/dev/null 2>&1
+-			echo -e "2\nn\n\n\n+32M\nef00\nn\n\n\n\n\nr\nh\n1 2\nn\n\ny\n\nn\n\nn\nwq\ny\n" | gdisk $installdevice || return $PARTITIONERROR
+-			partprobe $installdevice >/dev/null 2>&1; sleep 3
+-			mkfs.fat -n "efi"  $installdevice"1" || return $FORMATERROR
+-			mkfs.ext3 -L "Slackware-Live" $installmedia || return $FORMATERROR
++			if [ "$LIVEFS" == "vfat" ]; then
++				partitionnumber=1
++				installmedia="$installdevice$partitionnumber"
++				echo -e "2\nn\n\n\n\n0700\nr\nh\n1 2\nn\n\ny\n\nn\n\nn\nwq\ny\n" | gdisk $installdevice || return $PARTITIONERROR
++				#echo -e "2\nn\n\n\n+32M\nef00\nn\n\n\n\n0700\nr\nh\n1 2\nn\n\ny\n\nn\n\nn\nwq\ny\n" | gdisk $installdevice || return $PARTITIONERROR
++				#hybrid MBR with BIOS boot partition (1007K) EFI partition (32M) and live partition
++				#echo -e "2\nn\n\n\n+32M\nef00\nn\n\n\n\n0700\nn\n128\n\n\nef02\nr\nh\n1 2\nn\n\ny\n\nn\nn\nwq\ny\n" | gdisk $installdevice || return $PARTITIONERROR
++				partprobe $installdevice >/dev/null 2>&1; sleep 3
++				fat32option="-F 32"
++				mkfs.vfat $fat32option -n "$LIVELABEL" $installmedia || return $FORMATERROR
++				sleep 3
++			else
++				efipartition="$installdevice""1"
++				installmedia="$installdevice""2"
++				#hybrid MBR with BIOS boot partition (1007K) EFI partition (300M) and live partition
++				echo -e "2\nn\n\n\n+300M\nef00\nn\n\n\n\n\nr\nh\n1 2\nn\n\ny\n\nn\n\nn\nwq\ny\n" | gdisk $installdevice || return $PARTITIONERROR
++				#echo -e "2\nn\n\n\n+32M\nef00\nn\n\n\n\n\nn\n128\n\n\nef02\nr\nh\n1 2\nn\n\ny\n\nn\nn\nwq\ny\n" | gdisk $installdevice || return $PARTITIONERROR
++				# set the linux partition bootable
++				sgdisk -p -A 2:set:2 $installdevice
++				# confirm it was indeed set correctly
++				sgdisk -p -A 2:show $installdevice
++				partprobe $installdevice; sleep 3
++				echo "*** Formating EFI partition $efipartition ..."
++				mkfs.vfat -n "EFI" $efipartition || return $FORMATERROR
++				echo "*** Formating system partition $installmedia ..."
++				mkfs.ext3 -F -L "$LIVELABEL" $installmedia || return $FORMATERROR
++				sleep 3
++			fi
+ 		else #BIOS/MBR
+-			partitionnumber=4
++			partitionnumber=1
+ 			installmedia="$installdevice$partitionnumber"
+ 			if (( $mediasize < 2048 ))
+ 			then heads=128; sectors=32
+@@ -289,11 +384,20 @@
+ 			fi
+ 			mkdiskimage $installdevice 1 $heads $sectors || return $PARTITIONERROR
+ 			dd if=/dev/zero of=$installdevice bs=1 seek=446 count=64 >/dev/null 2>&1
+-			echo -e ',0\n,0\n,0\n,,83,*' | sfdisk $installdevice || return $PARTITIONERROR
+-			partprobe $installdevice; sleep 3
+-			mkfs.ext3 -L "Slackware-Live" $installmedia || return $FORMATERROR
++			if [ "$LIVEFS" = "vfat" ]; then
++				#echo -e ',0\n,0\n,0\n,,83,*' | sfdisk $installdevice || return $PARTITIONERROR
++				#echo -e ',0\n,0\n,0\n,,b,*' | sfdisk $installdevice || return $PARTITIONERROR
++				echo -e ',,b,*' | sfdisk $installdevice || return $PARTITIONERROR
++				partprobe $installdevice; sleep 3
++				fat32option="-F 32"
++				mkfs.vfat $fat32option -n "$LIVELABEL" $installmedia || return $FORMATERROR
++			else
++				echo -e ',,83,*' | sfdisk $installdevice || return $PARTITIONERROR
++				partprobe $installdevice; sleep 3
++				mkfs.ext3 -L "$LIVELABEL" $installmedia || return $FORMATERROR
++			fi
++			sleep 3
+ 		fi
+-		sleep 3
+ 	
+ 	else #install on partition: filesystem check and format if needed
+ 		partitionnumber=`echo $installmedia | cut -c9-`
+@@ -303,14 +407,14 @@
+ 			umount /mnt/tmp
+ 			fsck -fy $installmedia >/dev/null 2>&1
+ 		else #format partition
+-			if fdisk -l $installdevice 2>/dev/null | grep -q GPT; then
++			if fdisk -l $installdevice 2>/dev/null | grep -q 'GPT\|gpt' ; then
+ 				partitiontype=`gdisk -l $installdevice | grep "^  *$partitionnumber " | sed 's/  */:/g' | cut -f7 -d:`
+ 			else
+ 				partitiontype=`fdisk -l $installdevice 2>/dev/null | grep "^$installmedia " | sed -e 's/\*//' -e 's/  */:/g' | cut -f5 -d:`
+ 			fi
+ 			case $partitiontype in
+ 			83|8300) 
+-				mkfs.ext3 -L "Slackware-Live" $installmedia || return $FORMATERROR
++				mkfs.ext3 -L "$LIVELABEL" $installmedia || return $FORMATERROR
+ 				;;
+ 			*)
+ 				partition=`echo $installmedia | cut -c6-`
+@@ -319,48 +423,72 @@
+ 				if (( $size > 1024 )); then
+ 					fat32option="-F 32"
+ 				fi
+-				mkfs.fat $fat32option -n "Slackware-Live" $installmedia || return $FORMATERROR
++				mkfs.fat $fat32option -n "$LIVELABEL" $installmedia || return $FORMATERROR
+ 			esac
+ 			sleep 3
+ 		fi
+ 	fi
+ 	
+ 	#live system files copy
++#	if [ `uname -m` == "x86_64" ]; then #EFI/GPT
++#		efipartition="$installdevice"`gdisk -l $installdevice 2>/dev/null | grep " EF00 " | sed 's/  */:/g' | cut -f2 -d:`
++#		if [ ! -z "$efipartition" ] && [ "$efipartition" != "$installmedia" ]; then
++#			mkdir -p /mnt/tmp
++#			if mount $efipartition /mnt/tmp >/dev/null 2>&1; then
++#				sleep 1
++#				umount /mnt/tmp
++#			else
++#				mkfs.fat -n  "efi" $efipartition || return $FORMATERROR
++#			fi
++#			mkdir -p /mnt/efi
++#			mount $efipartition /mnt/efi
++#			cp -r $livedirectory/EFI /mnt/efi/
++#			umount /mnt/efi
++#			rmdir /mnt/efi
++#		fi
++#	fi
++	
++	mkdir -p /mnt/install
++	mount $installmedia /mnt/install
++	cp -r $livedirectory/boot /mnt/install/
+ 	if [ `uname -m` == "x86_64" ]; then #EFI/GPT
+-		efipartition="$installdevice"`gdisk -l $installdevice 2>/dev/null | grep " EF00 " | sed 's/  */:/g' | cut -f2 -d:`
+-		if [ ! -z "$efipartition" ] && [ "$efipartition" != "$installmedia" ]; then
+-			mkdir -p /mnt/tmp
+-			if mount $efipartition /mnt/tmp >/dev/null 2>&1; then
+-				sleep 1
+-				umount /mnt/tmp
+-			else
+-				mkfs.fat -n  "efi" $efipartition || return $FORMATERROR
+-			fi
++		if [ "$LIVEFS" == "vfat" ]; then
++			cp -r $livedirectory/EFI /mnt/install/
++			cp $livedirectory/efi.img /mnt/install/
++		else
++			echo "*** Installing EFI on $efipartition ..."
+ 			mkdir -p /mnt/efi
+-			mount $efipartition /mnt/efi
++			mount $efipartition /mnt/efi; sleep 1
+ 			cp -r $livedirectory/EFI /mnt/efi/
++			cp $livedirectory/efi.img /mnt/efi
+ 			umount /mnt/efi
+ 			rmdir /mnt/efi
+ 		fi
+ 	fi
+-	
+-	mkdir -p /mnt/install
+-	mount $installmedia /mnt/install
+-	cp -r $livedirectory/boot /mnt/install/
+-	if [ `uname -m` == "x86_64" ]; then #EFI/GPT
+-		cp -r $livedirectory/EFI /mnt/install/
+-		cp $livedirectory/efi.img /mnt/install/
+-	fi
+ 	if fdisk -l $installdevice 2>/dev/null | grep -q "^$installmedia "; then #legacy / CSM (Compatibility Support Module) boot, if $installmedia present in MBR (or hybrid MBR)
+ 		sfdisk --force $installdevice -A $partitionnumber 2>/dev/null
+ 		if mount | grep -q "^$installmedia .* vfat "; then #FAT32
+ 			umount /mnt/install
++			# Use syslinux to make the USB device bootable:
++			echo "--- Making the USB drive '$installdevice' bootable using syslinux..."
+ 			syslinux -d /boot/syslinux $installmedia || return $BOOTERROR
+-		else #Ext3 
++			cat /usr/share/syslinux/mbr.bin > $installdevice
++		else #ext3
++			#mv /mnt/install/boot/syslinux /mnt/install/boot/extlinux
++			#mv /mnt/install/boot/extlinux/syslinux.cfg /mnt/install/boot/extlinux/extlinux.conf
++			#rm -f /mnt/install/boot/extlinux/isolinux.*
++			#rm -f /mnt/install/boot/extlinux/boot.catalog
++			#/sbin/extlinux --install /mnt/install/boot/extlinux
++			# Use extlinux to make the USB device bootable:
++			echo "--- Making the USB drive '$installdevice' bootable using extlinux..."
+ 			extlinux -i /mnt/install/boot/syslinux || return $BOOTERROR
+ 			umount /mnt/install
++			if fdisk -l $installdevice 2>/dev/null | grep -q 'GPT\|gpt'; then
++				cat /usr/share/syslinux/gptmbr.bin > $installdevice
++			else
++				cat /usr/share/syslinux/mbr.bin > $installdevice
++			fi
+ 		fi
+-		cat /usr/share/syslinux/mbr.bin > $installdevice
+ 	else
+ 		umount /mnt/install
+ 	fi
+@@ -374,21 +502,119 @@
+ 	rootdirectory=$1
+ 	systempart=$2
+ 	loadersetup=$3
+-	SYSINSTALLFS="ext4"
++	rootpassword=$4
++	username=$5
++	userpassword=$6
++	installation_mode=$7
++	bootloader=$8
++	format_home=$9
++	SYSINSTALLFS=${10}
++	home_dir=${11}
++	locale=${12}
++	keyboard=${13}
++	
++	#SYSINSTALLFS="ext4" # set default filesystem of root
++	if [ "$SYSINSTALLFS" == "" ]; then
++	 SYSINSTALLFS="ext4" # set default filesystem of root
++	fi
+ 	
+-	mkfs.$SYSINSTALLFS $systempart || return $FORMATERROR
+ 
+ 	mkdir -p /mnt/install
++		
++	if mount $systempart /mnt/install 2>/dev/null; then  # if there is a filesystem find it
++	#	fs=`mount | grep "$systempart" | cut -f5 -d' '`
++	#	if echo $fs | grep -q "ext" || echo $fs | grep -q "btrfs" || echo $fs | grep -q "reiserfs"|| echo $fs | grep -q "jfs"|| echo $fs | grep -q "xfs"; then
++	#		SYSINSTALLFS=$fs  # find filesystem type
++	#	fi
++		umount /mnt/install	
++	else 
++		umount /mnt/install	
++	fi
++	
++	fs=$SYSINSTALLFS
++	
++	if [ "$fs" = "ext2" ]; then
++	   flag=" -F "
++	elif [ "$fs" = "ext3" ]; then
++	   flag=" -F "
++	elif [ "$fs" = "ext4" ]; then
++	   flag=" -F "     
++	elif [ "$fs" = "btrfs" ]; then
++	   flag="-f -d single -m single"
++	elif [ "$fs" = "jfs" ]; then
++	   flag=" -c -q " 
++	elif [ "$fs" = "reiserfs" ]; then
++	   flag=" -f "
++	elif [ "$fs" = "xfs" ]; then
++	   flag=" -f -q "   
++	fi
++	echo "formatting linux partition in $SYSINSTALLFS"
++	mkfs.$SYSINSTALLFS $flag $systempart || return $FORMATERROR  # format partition
++    echo "mount linux partition to /mnt/install"
+ 	mount $systempart /mnt/install
+-
++    
++    #handles home partition
++	if [ "$home_dir" != "" ] && [ "$home_dir" != "$systempart" ]; then
++		mkdir -p /mnt/install/home
++		if mount $home_dir /mnt/install/home 2>/dev/null; then  # if there is a filesystem find it
++			fs=`mount | grep "$home_dir" | cut -f5 -d' '`
++			if echo $fs | grep -q "ext" || echo $fs | grep -q "btrfs" || echo $fs | grep -q "reiserfs"|| echo $fs | grep -q "jfs"|| echo $fs | grep -q "xfs"; then
++				SYSINSTALLFS=$fs  # find filesystem type
++			fi
++			umount /mnt/install/home	
++		fi
++		if [ "$format_home" = "yes" ]; then
++			echo "formatting home partition in $SYSINSTALLFS"
++			mkfs.$SYSINSTALLFS $flag $home_dir
++		fi
++		echo "mount home partition to /mnt/install/home"
++		mount $home_dir /mnt/install/home
++			
++	#	if ! mount $home_dir /mnt/install/home 2>/dev/null; then
++	#		mkfs.$SYSINSTALLFS $flag $home_dir
++	#		mount $home_dir /mnt/install/home
++	#	fi
++		
++    fi
++    
+ 	#Copy begin
+-	for directory in $rootdirectory/*; do
+-		cp -dpr $directory /mnt/install/
+-	done
++	echo "Installing system"
++	# core, basic or full mode
++	if [ "$installation_mode" = "core" ]; then
++		echo "core installation"
++		modules=(01-core.slm 04-common.slm 05-kernel.slm 06-live.slm)
++		for directory in ${modules[@]}; do
++			cp -dpr $rootdirectory/$directory/* /mnt/install/
++		done
++	fi
++	
++	if [ "$installation_mode" = "basic" ]; then
++		echo "basic installation"
++		modules=(01-core.slm 02-basic.slm 04-common.slm 05-kernel.slm 06-live.slm)
++		for directory in ${modules[@]}; do
++			cp -dpr $rootdirectory/$directory/* /mnt/install/
++		done
++	fi
++	
++	if [ "$installation_mode" = "full" ]; then
++		echo "full installation"
++		modules=(01-core.slm 02-basic.slm 03-full.slm 04-common.slm 05-kernel.slm 06-live.slm)
++		for directory in ${modules[@]}; do
++			cp -dpr $rootdirectory/$directory/* /mnt/install/
++		done
++		
++		#for directory in $rootdirectory/*; do
++		#cp -dpr $directory /mnt/install/
++		#done		
++	fi
+ 	
+ 	mkdir -p /mnt/install/{dev,proc,sys,tmp}
+ 	cp -dpr /dev/sd* /mnt/install/dev/ #create disk nodes needed for LiLo
+-	cp -dpr $rootdirectory/lib/udev/devices/* /mnt/install/dev/
++	for dir in sys proc dev tmp; do mount --bind /$dir /mnt/install/$dir; done
++	#if [ "$rootdirectory" = "/live/modules" ]; then
++	#	cp -dpr /live/system/lib/udev/devices/* /mnt/install/dev/
++	#fi
++	#cp -dpr $rootdirectory/lib/udev/devices/* /mnt/install/dev/
+ 
+ 	sed -i /^root:/d /mnt/install/etc/shadow #setup root password
+ 	cat /etc/shadow | sed -n /^root:/p >> /mnt/install/etc/shadow
+@@ -397,38 +623,107 @@
+ 		cp -f /etc/rc.d/rc.keymap /mnt/install/etc/rc.d/
+ 	fi
+ 	cp -f /etc/profile.d/lang.sh /mnt/install/etc/profile.d/
+-	if [ -f /etc/X11/xorg.conf.d/20-keyboard.conf ]; then
+-		cp -f /etc/X11/xorg.conf.d/20-keyboard.conf /mnt/install/etc/X11/xorg.conf.d/
++	if [ -f /etc/X11/xorg.conf.d/10-keymap.conf ]; then
++		cp -f /etc/X11/xorg.conf.d/10-keymap.conf /mnt/install/etc/X11/xorg.conf.d/
+ 	fi
+ 	if [ -f /etc/X11/xorg.conf ]; then
+ 		cp -f /etc/X11/xorg.conf /mnt/install/etc/X11/
+ 	fi
++	
++	# set clock
++	if [ -x /etc/rc.d/rc.ntpd ]; then
++		chmod +x /mnt/install/etc/rc.d/rc.ntpd
++		cp -f /etc/ntp.conf /mnt/install/etc/
++	fi
++
+ 	if [ -f /etc/localtime ] &&  [ -h /etc/localtime-copied-from  ]; then
+-		cp -f /etc/localtime /mnt/install/etc/
+-		cp -df /etc/localtime-copied-from /mnt/install/etc/
++		cp -df /etc/localtime /mnt/install/etc/localtime
++		cp -df /etc/localtime-copied-from /mnt/install/etc/localtime-copied-from
+ 	fi
+ 	if [ -f /etc/hardwareclock ]; then
+ 		cp -f /etc/hardwareclock /mnt/install/etc/
+ 	fi
+ 	#Copy end
+-
++	#################
++	ROOTPART=$(lsblk -l -o name,mountpoint| grep /mnt/install$|sed "s,\([^[:space:]]*\).*,/dev/\1,")
++	ROOTNAME=$(echo $ROOTPART|sed "s,/dev/,,")
++	ROOTUUID=$(lsblk -l -o name,uuid|grep ^$ROOTNAME|sed "s/[^ ]*[[:space:]]*//")
++	#FSTYPE=$(lsblk -l -o name,fstype|grep ^$ROOTNAME|sed "s/[^ ]*[[:space:]]*//")
++	#ROOTDEVICE=/dev/$(lsblk -l -o name,pkname|grep ^$ROOTNAME|sed "s/[^ ]*[[:space:]]*//")
++	#BRAND=$(grep ^NAME /mnt/etc/os-release|sed "s/.*=//")
++	#################
++	echo "Setting up fstab"
+ 	#FSTab begin
+ 	cat > /mnt/install/etc/fstab << EOF
+ proc /proc proc defaults 0 0
+ sysfs /sys sysfs defaults 0 0
++tmpfs /dev/shm tmpfs defaults 0 0
+ $systempart / $SYSINSTALLFS defaults 1 1
+ EOF
+-	cat /etc/fstab | grep " swap " >> /mnt/install/etc/fstab
+-	cat /etc/fstab | grep "/mnt" |  grep -v "$systempart" >> /mnt/install/etc/fstab
+-	cat /etc/fstab | grep "/mnt" |  grep -v "$systempart" | cut -f2 -d' ' | while read mountpoint; do
+-		mkdir /mnt/install$mountpoint
+-	done
++
++	if [ "$home_dir" != "" ] && [ "$home_dir" != "$systempart" ]; then
++		fs=`mount | grep "$home_dir" | cut -f5 -d' '` > /dev/null 2>&1
++		if echo $fs | grep -q "ext" || echo $fs | grep -q "btrfs" || echo $fs | grep -q "reiserfs"|| echo $fs | grep -q "jfs"|| echo $fs | grep -q "xfs"; then
++			echo "$home_dir /home $fs defaults 1 1" >> /mnt/install/etc/fstab
++		fi
++	fi
++	
++	#cat /etc/fstab | grep " swap " >> /mnt/install/etc/fstab
++	
++	#cat /etc/fstab | grep "/mnt" |  grep -v "$systempart" >> /mnt/install/etc/fstab
++	#cat /etc/fstab | grep "/mnt" |  grep -v "$systempart" | cut -f2 -d' ' | while read mountpoint; do
++	#	mkdir /mnt/install$mountpoint
++	#done
+ 	echo "$systempart / $SYSINSTALLFS defaults 1 1" > /mnt/install/etc/mtab
+ 	#FSTab end
++    
++    # First, determine our slackware kernel name:
++	for ELEMENT in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 ; do
++	if $(cat /proc/cmdline | cut -f $ELEMENT -d ' ' | grep -q BOOT_IMAGE) ; then
++		SLACK_KERNEL=$(cat /proc/cmdline | cut -f $ELEMENT -d ' ' | cut -f 2 -d = | sed "s/\/boot\///")
++	fi
++	done
++	unset ELEMENT
++
++	# Next, find the kernel's release version:
++	VERSION=$(uname -r | tr - _)
++
++	# Next find our initrd name
++	for ELEMENT in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 ; do
++	if $(cat /proc/cmdline | cut -f $ELEMENT -d ' ' | grep -q initrd) ; then
++		SLACK_INITRD=$(cat /proc/cmdline | cut -f $ELEMENT -d ' ' | cut -f 2 -d = | sed "s/\/boot\///")
++	fi
++	done
++	unset ELEMENT
+ 	
++	( cd /mnt/install/boot
++	if [ "$SLACK_KERNEL" == "vmlinuz" ]; then
++	 if [ -r vmlinuz-huge-smp-$VERSION ]; then
++      ln -sf vmlinuz-huge-smp-$VERSION vmlinuz
++      ln -sf config-huge-smp-$VERSION config
++      ln -sf System.map-huge-smp-$VERSION System.map
++     fi
++    fi
++    
++    if [ "$SLACK_KERNEL" == "vmlinuznp" ]; then   
++     if [ -r vmlinuz-huge-$VERSION ]; then
++      ln -sf vmlinuz-huge-$VERSION vmlinuz
++      ln -sf config-huge-$VERSION config
++      ln -sf System.map-huge-$VERSION System.map
++     fi
++    fi
++    
++    if [ "$SLACK_INITRD" == "nosmp.gz" ]; then 
++     cp initrd.gz smp.gz
++     cp nosmp.gz initrd.gz
++    fi 
++    )
++
+ 	#InitRD begin
+ 	if [ ! -f /mnt/install/boot/initrd.gz ]; then
+-		kv=`basename /mnt/install/lib/modules/*`
++		echo "Setting initrd"
++		#kv=`basename /mnt/install/lib/modules/*`
++		kv=`ls -l /mnt/install/boot/vmlinuz | cut -f2 -d'>' | sed s/^[^0-9]*//`
+ 		if lsmod | grep -q $SYSINSTALLFS; then
+ 			moduleslist="$SYSINSTALLFS"
+ 		fi
+@@ -445,16 +740,33 @@
+ 		done
+ 		moduleslist=`echo $moduleslist | sed 's/:$//'`
+ 		if [ ! -z "$moduleslist" ] && [ "$moduleslist" != "sg" ]; then
+-			chroot /mnt/install mount /proc
++			#chroot /mnt/install mount /proc
+ 			chroot /mnt/install mkinitrd -c -f $SYSINSTALLFS -r $systempart -k $kv -m $moduleslist
+-			chroot /mnt/install umount /proc
++			#chroot /mnt/install umount /proc
+ 		fi
+ 	fi
++		
++	#####
++     installdevice=`echo $systempart | cut -c1-8`
++     if [ "$installdevice" != "/dev/sda" ]; then 
++		#if [ -f /live/media/boot/initrd-usb.gz ]; then 
++			echo "Copying initrd"
++			#kv=`basename /mnt/install/lib/modules/*`
++			kv=`ls -l /mnt/install/boot/vmlinuz | cut -f2 -d'>' | sed s/^[^0-9]*//`
++			#MODULES="loop:xhci-pci:ohci-pci:ehci-pci:xhci-hcd:uhci-hcd:ehci-hcd:mmc-core:mmc-block:sdhci:sdhci-pci:sdhci-acpi:usb-storage:hid:usbhid:i2c-hid:hid-generic:hid-apple:hid-asus:hid-cherry:hid-logitech:hid-logitech-dj:hid-logitech-hidpp:hid-lenovo:hid-microsoft:hid_multitouch:crc32c-intel:fuse"
++			MODULES="loop:xhci-pci:ohci-pci:ehci-pci:xhci-hcd:uhci-hcd:ehci-hcd:mmc-core:mmc-block:sdhci:sdhci-pci:sdhci-acpi:usb-storage:hid:usbhid:i2c-hid:hid-generic:hid-apple:hid-asus:hid-cherry:hid-logitech:hid-logitech-dj:hid-logitech-hidpp:hid-lenovo:hid-microsoft:hid_multitouch:crc32c-intel:fuse:nls_cp437:nls_iso8859-1"
++			chroot /mnt/install mkinitrd -c -f $SYSINSTALLFS -u -w 10 -o /boot/initrd.gz -r UUID=$ROOTUUID -k $kv -m $MODULES
++			chroot /mnt/install rm -rf /boot/initrd-tree/
++			#cp /live/media/boot/initrd-usb.gz /mnt/install/boot/initrd.gz
++		#fi	
++     fi
++     #####
+ 	#InitRD end
+-	
++   if [ "$bootloader" == "lilo" ]; then
+ 	#LiLo begin
+ 	if [ "$loadersetup" == "-auto" ]; then
+ 		installdevice=`echo $systempart | cut -c1-8`
++		echo "Setting (e)Lilo"
+ 		if [ -d /sys/firmware/efi ]; then #UEFI
+ 			modprobe efivars
+ 			efipartnum=`gdisk -l $installdevice | grep "EF00" | sed 's/  \+/ /g' | cut -f2 -d' '`
+@@ -462,7 +774,7 @@
+ 			if [ ! -z "$efipartition" ]; then
+ 				mkdir -p /mnt/efi
+ 				mount $efipartition /mnt/efi
+-				efilabel="Slackware"
++				efilabel=$SLACKEL_FLAVOR
+ 				if [ -d /mnt/efi/EFI/$efilabel ]; then
+ 					conflictpart=`cat /mnt/efi/EFI/$efilabel/elilo.conf | grep "append" | sed 's/.*root=\([^ ]*\).*/\1/'`
+ 					if [ "$conflictpart" == "$systempart" ]
+@@ -476,27 +788,69 @@
+ 				cp /mnt/install/boot/vmlinuz /mnt/efi/EFI/$efilabel/
+ 				cat > /mnt/efi/EFI/$efilabel/elilo.conf << EOF
+ timeout=1
+-default=slackware
++default=$SLACKEL_FLAVOR
+ 
+ image=vmlinuz
+-    label=slackware
++    label=$SLACKEL_FLAVOR
+     append="root=$systempart ro"
+ 	read-only
+ EOF
++
++				#####
++				if [ "$installdevice" != "/dev/sda" ]; then
++					if [ "$installdevice" != "/dev/sdb" ]; then
++						real_device=`echo $installdevice | cut -c6-8`
++						sed -i "s/$real_device/sdb/g" /mnt/efi/EFI/$efilabel/elilo.conf
++					fi
++				fi
++				#####
++				
+ 				if [ -f /mnt/install/boot/initrd.gz ]; then
+-					echo "  initrd=initrd.gz" >> /mnt/efi/EFI/$efilabel/elilo.conf
++					echo "  initrd=/boot/initrd.gz" >> /mnt/efi/EFI/$efilabel/elilo.conf
+ 					cp /mnt/install/boot/initrd.gz /mnt/efi/EFI/$efilabel/
+ 				fi
++				
+ 				umount /mnt/efi
+ 				rmdir /mnt/efi
+-				efibootmgr -q -c -d $installdevice -p $efipartnum -l "\\EFI\\$efilabel\\elilo.efi" -L "Slackware ($systempart)"
++				efibootmgr -q -c -d $installdevice -p $efipartnum -l "\\EFI\\$efilabel\\elilo.efi" -L "$SLACKEL_FLAVOR ($systempart)"
+ 			fi
++			
++			# Add the EFI System Partition to /etc/fstab:
++			mkdir -p /mnt/install/boot/efi
++			echo "$efipartition /boot/efi vfat defaults 1 0 " >> /mnt/install/etc/fstab
++			if [ "$installdevice" != "/dev/sda" ]; then
++				mkdir -p /mnt/efi
++				mount $efipartition /mnt/efi
++				mkdir -p /mnt/efi/EFI/BOOT
++				cp /mnt/efi/EFI/$efilabel/* /mnt/efi/EFI/BOOT/
++				mv /mnt/efi/EFI/BOOT/elilo.efi /mnt/efi/EFI/BOOT/bootx64.efi
++				cat > /mnt/efi/EFI/BOOT/elilo.conf << EOF
++timeout=1
++default=$SLACKEL_FLAVOR
++
++image=/EFI/BOOT/vmlinuz
++    label=$SLACKEL_FLAVOR
++    append="root=$systempart ro"
++	read-only
++	initrd=/EFI/BOOT/initrd.gz
++EOF
++
++				if [ "$installdevice" != "/dev/sdb" ]; then
++						real_device=`echo $installdevice | cut -c6-8`
++						sed -i "s/$real_device/sdb/g" /mnt/efi/EFI/BOOT/elilo.conf
++						sed -i "s/$real_device/sdb/g" /mnt/install/etc/fstab
++				fi
++				umount /mnt/efi
++				rmdir /mnt/efi
++			fi	
++			
++			
+ 		else #BIOS
+ 			echo "boot = $installdevice" > /mnt/install/etc/lilo.conf
+-			if [ -f /mnt/install/boot/slack.bmp ]; then
++			if [ -f /mnt/install/boot/slackel.bmp ]; then
+ 				cat >> /mnt/install/etc/lilo.conf << EOF
+ 
+-bitmap = /boot/slack.bmp
++bitmap = /boot/slackel.bmp
+ bmp-colors = 255,0,255,0,255,0
+ bmp-table = 60,6,1,16
+ bmp-timer = 65,27,0,255
+@@ -514,11 +868,12 @@
+ 
+ image = /boot/vmlinuz
+ root = $systempart
+-label = Linux
++label = $SLACKEL_FLAVOR_LILO
+ read-only
+ EOF
++			
+ 			if [ -f /mnt/install/boot/initrd.gz ]; then
+-				echo "initrd = /boot/initrd.gz" >> /mnt/install/etc/lilo.conf
++				echo "initrd=/boot/initrd.gz" >> /mnt/install/etc/lilo.conf
+ 			fi
+ 			windowspartition=`fdisk -l $installdevice 2>/dev/null | grep "^$installdevice.*\*.*\(NTFS\|FAT32\)" | cut -f1 -d' '`
+ 			if [ ! -z "$windowspartition" ]; then
+@@ -529,16 +884,705 @@
+ table = $installdevice
+ EOF
+ 			fi
+-			chroot /mnt/install mount /proc
++			#chroot /mnt/install mount /proc
+ 			chroot /mnt/install lilo || return $BOOTERROR
+-			chroot /mnt/install umount /proc
++			#chroot /mnt/install umount /proc
++			#####
++			if [ "$installdevice" != "/dev/sda" ]; then
++				if [ "$installdevice" != "/dev/sdb" ]; then
++					real_device=`echo $installdevice | cut -c6-8`
++					sed -i "s/$real_device/sdb/g" /mnt/install/etc/lilo.conf
++				fi
++			fi
++			#####	
++			
+ 		fi
+ 	fi
+-	#LiLo end
++   fi #LiLo end
++  
++   if [ "$bootloader" == "grub" ]; then
++	#grub begin
++	if [ "$loadersetup" == "-auto" ]; then
++		grustatus=$GRUBERROR
++		installdevice=`echo $systempart | cut -c1-8`
++		echo "Installing Grub Boot Loader on $installdevice"
++		efipartnum=`gdisk -l $installdevice 2>/dev/null | grep " EF00 " | sed 's/  */:/g' | cut -f2 -d:`
++		#if [ -d /sys/firmware/efi ] && [ ! -z "$efipartnum" ]; then #EFI
++		if [ ! -z "$efipartnum" ] && [ -d $grublibdir/x86_64-efi ]; then
++			efipartition="$installdevice$efipartnum"
++			#modprobe efivars #for efibootmgr; unneded here: done by grub install
++			mkdir -p /mnt/efi
++			mount $efipartition /mnt/efi
++			if  [ `uname -m` != "x86_64" ] ; then #modprobe efivars fails on 32 bits Slackware
++				mv /lib/modules/`uname -r`/kernel/drivers/firmware/efi/efivars.{ko,ok}
++				#efidir="slackware-`cat /etc/slackware-version | cut -f2 -d' '`"
++				efidir=$SLACKEL_FLAVOR
++				echo "*** add boot entry for '\\EFI\\$efidir\\grubx64.efi' from UEFI setup ***"
++			fi
++			grub-install --efi-directory /mnt/efi --boot-directory /mnt/install/boot/ --target=x86_64-efi 2>/dev/null && grubstatus=0
++			umount /mnt/efi
++			rmdir /mnt/efi
++			# Add the EFI System Partition to /etc/fstab:
++			mkdir -p /mnt/install/boot/efi
++			echo "$efipartition /boot/efi vfat defaults 1 0 " >> /mnt/install/etc/fstab
++			if [ "$installdevice" != "/dev/sda" ]; then
++				mkdir -p /mnt/efi
++				mount $efipartition /mnt/efi
++				mkdir -p /mnt/efi/EFI/BOOT
++				cp /mnt/efi/EFI/slackel/grubx64.efi /mnt/efi/EFI/BOOT/bootx64.efi
++				umount /mnt/efi
++				rmdir /mnt/efi
++			fi	
++		fi
++		#else #CSM
++		
++			if echo -e "print\nquit" | parted $installdevice | grep -q ": msdos$" || 
++				gdisk -l $installdevice 2>/dev/null | grep -q " EF02 "; then
++				grub-install --target=i386-pc --boot-directory /mnt/install/boot --recheck --force $installdevice  && grubstatus=0 #grub-bios-setup
++			else
++				echo "Warning : GRUB can't be installed:"
++				#if [ -d /sys/firmware/efi ]; then
++				if [ -z "$efipartnum" ]; then
++					echo "- UEFI boot: no 'ef00' - efi partition on $installdevice"
++				else
++					echo "- CSM (legacy) boot: no 'ef02' - BIOS boot partition on $installdevice (GPT)"
++				fi
++			fi
++		#fi
++		#for dir in sys proc dev; do mount --bind /$dir /mnt/install/$dir; done
++		chroot /mnt/install grub-mkconfig -o /boot/grub/grub.cfg
++		#for dir in sys proc dev; do umount /mnt/install/$dir; done
++	fi
++		#####
++		#if [ "$installdevice" != "/dev/sda" ]; then
++		#	if [ "$installdevice" != "/dev/sdb" ]; then
++		#		real_device=`echo $installdevice | cut -c6-8`
++		#		sed -i "s/$real_device/sdb/g" /mnt/install/boot/grub/grub.cfg
++		#		sed -i "s/hd2/hd1/g" /mnt/install/boot/grub/grub.cfg
++		#		sed -i "s/ahci2/ahci1/g" /mnt/install/boot/grub/grub.cfg
++		#	fi
++		#fi
++		#####
++   fi # end grub
++	
++	liveuser=$(cat /etc/passwd | grep /bin/bash | grep /home/| cut -d : -f 1)
++	if [ "$liveuser" != "" ]; then 
++		echo "Deleting liveuser $liveuser"
++		#chroot /mnt/install mount /proc
++		chroot /mnt/install /usr/sbin/userdel -r $liveuser  2>/dev/null
++		#chroot /mnt/install umount /proc
++	fi
++	
++	if [ "$username" != "" ]; then 
++		echo "Creating user $username with password $userpassword"
++		#chroot /mnt/install mount /proc
++		chroot /mnt/install /usr/sbin/useradd -s /bin/bash -g users -m -k /etc/skel -G audio,video,cdrom,floppy,lp,plugdev,polkitd,power,pulse,netdev,scanner,wheel "$username"
++		#chroot /mnt/install umount /proc
++	fi
++	
++	if [ "$userpassword" != "" ]; then 
++		echo "Setting password for user $username to $userpassword"
++		#chroot /mnt/install mount /proc
++		echo ${username}:${userpassword} | chroot /mnt/install chpasswd 
++		#chroot /mnt/install umount /proc
++	fi
++	
++	if [ "$rootpassword" != "" ]; then 
++		echo "Setting password for root to $rootpassword"
++		#chroot /mnt/install mount /proc
++		echo root:${rootpassword} | chroot /mnt/install chpasswd
++		#chroot /mnt/install umount /proc
++	fi
++	
++	if [ "$username" != "" ] && [ "$userpassword" != "" ] && [ "$rootpassword" != "" ]; then 
++		echo ${username}:${userpassword} | chroot /mnt/install ln -sf /home/$username/.gtkrc-2.0 /etc/gtk-2.0/gtkrc 
++		echo ${username}:${userpassword} | chroot /mnt/install ln -sf /home/$username/.config/gtk-3.0/settings.ini /etc/gtk-3.0/settings.ini
++	fi
++	 
++    ##############
++	# set locale
++	if [ "$locale" ]; then
++		sed -i "s/^ *\(export LANG=\).*$/\1$locale/" /mnt/install/etc/profile.d/lang.sh
++	    locale_noutf8=`echo $locale | sed "s/.utf8//"`
++	fi
++	# set keyboard
++	if [ "$keyboard" ]; then
++		chroot /mnt/install /usr/sbin/keyboardsetup -k $keyboard  2>/dev/null
++	fi
++	#########
++	
++	if [ -f /mnt/install/etc/kde/kdm/kdmrc ]; then
++	  sed -i "s/NoPassEnable=.*/NoPassEnable=/g" /mnt/install/etc/kde/kdm/kdmrc
++	  sed -i "s/NoPassUsers=.*/NoPassUsers=/g" /mnt/install/etc/kde/kdm/kdmrc
++	  sed -i "s/DefaultUser=.*/DefaultUser=/g" /mnt/install/etc/kde/kdm/kdmrc
++	  sed -i "s/AllowNullPasswd=.*/AllowNullPasswd=/g" /mnt/install/etc/kde/kdm/kdmrc
++	  sed -i "s/AutoLoginEnable=.*/AutoLoginEnable=/g" /mnt/install/etc/kde/kdm/kdmrc
++	  sed -i "s/AutoLoginUser=.*/AutoLoginUser=/g" /mnt/install/etc/kde/kdm/kdmrc
++	  if [ "$locale" ]; then
++		locale_noutf8=`echo $locale | sed "s/.utf8//"`
++		sed -i "s/^ *\(export LANG=\).*$/\1$locale/" /mnt/install/etc/profile.d/lang.sh
++	  else  
++		locale_noutf8=`cat /etc/kde/kdm/kdmrc | grep Language= | sed 's/\Language=//'`
++		sed -i "s/\(^\|^#\)Language=.*/Language=$locale_noutf8/" /mnt/install/etc/kde/kdm/kdmrc
++	  fi
++	fi
++
++	if [ -f /mnt/install/etc/lightdm/lightdm.conf ]; then
++	cat > /mnt/install/etc/lightdm/lightdm.conf << EOF
++#
++# General configuration
++#
++# start-default-seat = True to always start one seat if none are defined in the configuration
++# greeter-user = User to run greeter as
++# minimum-display-number = Minimum display number to use for X servers
++# minimum-vt = First VT to run displays on
++# lock-memory = True to prevent memory from being paged to disk
++# user-authority-in-system-dir = True if session authority should be in the system location
++# guest-account-script = Script to be run to setup guest account
++# logind-check-graphical = True to on start seats that are marked as graphical by logind
++# log-directory = Directory to log information to
++# run-directory = Directory to put running state in
++# cache-directory = Directory to cache to
++# sessions-directory = Directory to find sessions
++# remote-sessions-directory = Directory to find remote sessions
++# greeters-directory = Directory to find greeters
++# backup-logs = True to move add a .old suffix to old log files when opening new ones
++# dbus-service = True if LightDM provides a D-Bus service to control it
++#
++[LightDM]
++#start-default-seat=true
++#greeter-user=gdm
++#minimum-display-number=0
++#minimum-vt=7
++#lock-memory=true
++#user-authority-in-system-dir=false
++#guest-account-script=guest-account
++#logind-check-graphical=false
++#log-directory=/var/log/lightdm
++#run-directory=/var/run/lightdm
++#cache-directory=/var/cache/lightdm
++#sessions-directory=/usr/share/lightdm/sessions:/usr/share/xsessions:/usr/share/wayland-sessions
++#remote-sessions-directory=/usr/share/lightdm/remote-sessions
++#greeters-directory=$XDG_DATA_DIRS/lightdm/greeters:$XDG_DATA_DIRS/xgreeters
++#backup-logs=true
++#dbus-service=true
++
++#
++# Seat configuration
++#
++# Seat configuration is matched against the seat name glob in the section, for example:
++# [Seat:*] matches all seats and is applied first.
++# [Seat:seat0] matches the seat named "seat0".
++# [Seat:seat-thin-client*] matches all seats that have names that start with "seat-thin-client".
++#
++# type = Seat type (local, xremote)
++# pam-service = PAM service to use for login
++# pam-autologin-service = PAM service to use for autologin
++# pam-greeter-service = PAM service to use for greeters
++# xserver-command = X server command to run (can also contain arguments e.g. X -special-option)
++# xmir-command = Xmir server command to run (can also contain arguments e.g. Xmir -special-option)
++# xserver-config = Config file to pass to X server
++# xserver-layout = Layout to pass to X server
++# xserver-allow-tcp = True if TCP/IP connections are allowed to this X server
++# xserver-share = True if the X server is shared for both greeter and session
++# xserver-hostname = Hostname of X server (only for type=xremote)
++# xserver-display-number = Display number of X server (only for type=xremote)
++# xdmcp-manager = XDMCP manager to connect to (implies xserver-allow-tcp=true)
++# xdmcp-port = XDMCP UDP/IP port to communicate on
++# xdmcp-key = Authentication key to use for XDM-AUTHENTICATION-1 (stored in keys.conf)
++# greeter-session = Session to load for greeter
++# greeter-hide-users = True to hide the user list
++# greeter-allow-guest = True if the greeter should show a guest login option
++# greeter-show-manual-login = True if the greeter should offer a manual login option
++# greeter-show-remote-login = True if the greeter should offer a remote login option
++# user-session = Session to load for users
++# allow-user-switching = True if allowed to switch users
++# allow-guest = True if guest login is allowed
++# guest-session = Session to load for guests (overrides user-session)
++# session-wrapper = Wrapper script to run session with
++# greeter-wrapper = Wrapper script to run greeter with
++# guest-wrapper = Wrapper script to run guest sessions with
++# display-setup-script = Script to run when starting a greeter session (runs as root)
++# display-stopped-script = Script to run after stopping the display server (runs as root)
++# greeter-setup-script = Script to run when starting a greeter (runs as root)
++# session-setup-script = Script to run when starting a user session (runs as root)
++# session-cleanup-script = Script to run when quitting a user session (runs as root)
++# autologin-guest = True to log in as guest by default
++# autologin-user = User to log in with by default (overrides autologin-guest)
++# autologin-user-timeout = Number of seconds to wait before loading default user
++# autologin-session = Session to load for automatic login (overrides user-session)
++# autologin-in-background = True if autologin session should not be immediately activated
++# exit-on-failure = True if the daemon should exit if this seat fails
++#
++[Seat:*]
++#type=local
++#pam-service=lightdm
++#pam-autologin-service=lightdm-autologin
++#pam-greeter-service=lightdm-greeter
++#xserver-command=X
++#xmir-command=Xmir
++#xserver-config=
++#xserver-layout=
++#xserver-allow-tcp=false
++#xserver-share=true
++#xserver-hostname=
++#xserver-display-number=
++#xdmcp-manager=
++#xdmcp-port=177
++#xdmcp-key=
++#greeter-session=example-gtk-gnome
++#greeter-hide-users=false
++#greeter-allow-guest=true
++#greeter-show-manual-login=false
++#greeter-show-remote-login=true
++#user-session=default
++#allow-user-switching=true
++#allow-guest=true
++#guest-session=
++#session-wrapper=lightdm-session
++#greeter-wrapper=
++#guest-wrapper=
++#display-setup-script=
++#display-stopped-script=
++#greeter-setup-script=
++#session-setup-script=
++#session-cleanup-script=
++#autologin-guest=false
++#autologin-user=
++#autologin-user-timeout=0
++#autologin-in-background=false
++#autologin-session=
++#exit-on-failure=false
++
++#
++# XDMCP Server configuration
++#
++# enabled = True if XDMCP connections should be allowed
++# port = UDP/IP port to listen for connections on
++# listen-address = Host/address to listen for XDMCP connections (use all addresses if not present)
++# key = Authentication key to use for XDM-AUTHENTICATION-1 or blank to not use authentication (stored in keys.conf)
++# hostname = Hostname to report to XDMCP clients (defaults to system hostname if unset)
++#
++# The authentication key is a 56 bit DES key specified in hex as 0xnnnnnnnnnnnnnn.  Alternatively
++# it can be a word and the first 7 characters are used as the key.
++#
++[XDMCPServer]
++#enabled=false
++#port=177
++#listen-address=
++#key=
++#hostname=
++
++#
++# VNC Server configuration
++#
++# enabled = True if VNC connections should be allowed
++# command = Command to run Xvnc server with
++# port = TCP/IP port to listen for connections on
++# listen-address = Host/address to listen for VNC connections (use all addresses if not present)
++# width = Width of display to use
++# height = Height of display to use
++# depth = Color depth of display to use
++#
++[VNCServer]
++#enabled=false
++#command=Xvnc
++#port=5900
++#listen-address=
++#width=1024
++#height=768
++#depth=8
++EOF
++	fi
++
++	if [ -f /mnt/install/etc/gdm/custom.conf ]; then
++	cat > /mnt/install/etc/gdm/custom.conf << EOF
++# GDM Custom Configuration file.
++#
++# This file is the appropriate place for specifying your customizations to the
++# GDM configuration.   If you run gdmsetup, it will automatically edit this
++# file for you and will cause the daemon and any running GDM GUI programs to
++# automatically update with the new configuration.  Not all configuration
++# options are supported by gdmsetup, so to modify some values it may be
++# necessary to modify this file directly by hand.
++#
++# This file overrides the default configuration settings.  These settings 
++# are stored in the GDM System Defaults configuration file, which is found
++# at the following location.
++#
++# /usr/share/gdm/defaults.conf.  
++#
++# This file contains comments about the meaning of each configuration option,
++# so is also a useful reference.  Also refer to the documentation links at
++# the end of this comment for further information.  In short, to hand-edit
++# this file, simply add or modify the key=value combination in the
++# appropriate section in the template below this comment section.
++#
++# For example, if you want to specify a different value for the Enable key
++# in the "[debug]" section of your GDM System Defaults configuration file,
++# then add "Enable=true" in the "[debug]" section of this file.  If the
++# key already exists in this file, then simply modify it.
++#
++# Older versions of GDM used the "gdm.conf" file for configuration.  If your
++# system has an old gdm.conf file on the system, it will be used instead of
++# this file - so changes made to this file will not take effect.  Consider
++# migrating your configuration to this file and removing the gdm.conf file.
++#
++# If you hand edit a GDM configuration file, you can run the following
++# command and the GDM daemon will immediately reflect the change.  Any
++# running GDM GUI programs will also be notified to update with the new
++# configuration.
++#
++# gdmflexiserver --command="UPDATE_CONFIG <configuration key>"
++#
++# e.g, the "Enable" key in the "[debug]" section would be "debug/Enable".
++#
++# You can also run gdm-restart or gdm-safe-restart to cause GDM to restart and
++# re-read the new configuration settings.  You can also restart GDM by sending
++# a HUP or USR1 signal to the daemon.  HUP behaves like gdm-restart and causes
++# any user session started by GDM to exit immediately while USR1 behaves like
++# gdm-safe-restart and will wait until all users log out before restarting GDM.
++#
++# For full reference documentation see the gnome help browser under
++# GNOME|System category.  You can also find the docs in HTML form on
++# http://www.gnome.org/projects/gdm/
++#
++# NOTE: Lines that begin with "#" are considered comments.
++#
++# Have fun!
++
++[daemon]
++
++[security]
++
++[xdmcp]
++
++[gui]
++
++[greeter]
++
++[chooser]
++
++[debug]
++
++# Note that to disable servers defined in the GDM System Defaults
++# configuration file (such as 0=Standard, you must put a line in this file
++# that says 0=inactive, as described in the Configuration section of the GDM
++# documentation.
++#
++[servers]
++
++# Also note, that if you redefine a [server-foo] section, then GDM will
++# use the definition in this file, not the GDM System Defaults configuration
++# file.  It is currently not possible to disable a [server-foo] section
++# defined in the GDM System Defaults configuration file.
++#
++EOF
++	fi
+ 	
++	if [ -f /mnt/install/etc/slim.conf ]; then
++	cat > /mnt/install/etc/slim.conf << EOF
++# Path, X server and arguments (if needed)
++# Note: -xauth $authfile is automatically appended
++Slackel_path        /bin:/usr/bin:/usr/local/bin
++Slackel_xserver     /usr/bin/X
++#xserver_arguments   -dpi 75
++
++# Commands for halt, login, etc.
++halt_cmd            /sbin/shutdown -h now
++reboot_cmd          /sbin/shutdown -r now
++console_cmd         /usr/bin/xterm -C -fg white -bg black +sb -T "Console login" -e /bin/sh -c "/bin/cat /etc/issue; exec /bin/login"
++#suspend_cmd        /usr/sbin/suspend
++## slackware suspend command
++suspend_cmd        /usr/sbin/pm-suspend
++
++# Full path to the xauth binary
++xauth_path         /usr/bin/xauth 
++
++# Xauth file for server
++authfile           /var/run/slim.auth
++
++
++# Activate numlock when slim starts. Valid values: on|off
++# numlock             on
++
++# Hide the mouse cursor (note: does not work with some WMs).
++# Valid values: true|false
++# hidecursor          false
++
++# This command is executed after a succesful login.
++# you can place the %session and %theme variables
++# to handle launching of specific commands in .xinitrc
++# depending of chosen session and slim theme
++#
++# NOTE: if your system does not have bash you need
++# to adjust the command according to your preferred shell,
++# i.e. for freebsd use:
++# login_cmd           exec /bin/sh - ~/.xinitrc %session
++login_cmd           exec /bin/bash -login ~/.xinitrc %session
++
++# Commands executed when starting and exiting a session.
++# They can be used for registering a X11 session with
++# sessreg. You can use the %user variable
++#
++# sessionstart_cmd	some command
++# sessionstop_cmd	some command
++
++# Start in daemon mode. Valid values: yes | no
++# Note that this can be overriden by the command line
++# options "-d" and "-nodaemon"
++# daemon	yes
++
++# Available sessions (first one is the Slackel).
++# The current chosen session name is replaced in the login_cmd
++# above, so your login command can handle different sessions.
++# see the xinitrc.sample file shipped with slim sources
++sessions            xfce4,icewm-session,wmaker,blackbox
++
++# Executed when pressing F11 (requires imagemagick)
++screenshot_cmd      import -window root /slim.png
++
++# welcome message. Available variables: %host, %domain
++welcome_msg         Welcome to %host
++
++# Session message. Prepended to the session name when pressing F1
++# session_msg         Session: 
++
++# shutdown / reboot messages
++shutdown_msg       The system is halting...
++reboot_msg         The system is rebooting...
++
++# Slackel user, leave blank or remove this line
++# for avoid pre-loading the username.
++#Slackel_user        simone
++
++# Focus the password field on start when Slackel_user is set
++# Set to "yes" to enable this feature
++#focus_password      no
++
++# Automatically login the Slackel user (without entering
++# the password. Set to "yes" to enable this feature
++#auto_login          no
++
++
++# current theme, use comma separated list to specify a set to 
++# randomly choose from
++current_theme       Slackel
++
++# Lock file
++lockfile            /var/run/slim.lock
++
++# Log file
++logfile             /var/log/slim.log
++
++EOF
++
++	chmod 755 /mnt/install/usr/bin/slim
++fi
++
++	echo "Removing installer"
++	#chroot /mnt/install rm -f /home/one/Desktop/slackel-live-installer.desktop
++	chroot /mnt/install rm -f /home/one/Desktop/sli*.desktop
++	
++	#chroot /mnt/install spkg -d slackel-live-installer
++	chroot /mnt/install /sbin/spkg -d sli
++	
++	#chroot /mnt/install
++	
++	
++	# Run various slackware install routines
++	#echo "Run various slackware install routines"
++	
++	#echo "run mkfont"
++	#if [ -f /mnt/install/var/log/setup/setup.04.mkfontdir ]; then
++	#	chroot /mnt/install /var/log/setup/setup.04.mkfontdir
++	#fi
++	#echo " update-icon-cache"
++	#if [ -f /mnt/install/var/log/setup/setup.08.gtk-update-icon-cache ]; then
++	#	chroot /mnt/install /var/log/setup/setup.08.gtk-update-icon-cache
++	#fi
++	#echo "run update all"
++	#if [ -f /mnt/install/usr/sbin/update-all ]; then
++	#	chroot /mnt/install /usr/sbin/update-all
++	#fi
++	#echo "run setup services"
++	#if [ -f /mnt/install/var/log/setup/setup.services ]; then
++	#	chroot /mnt/install /var/log/setup/setup.services
++	#fi
++	
++	# Set the hostname.echo "umount /mnt/install"
++	chmod 777 /mnt/install/etc/HOSTNAME
++	echo "slackel.example.net" > /mnt/install/etc/HOSTNAME
++	chmod 644 /mnt/install/etc/HOSTNAME  
++		
++	# Use any available swap device:
++    for SWAPD in $(blkid | grep $installdevice |grep TYPE="\"swap\"" |cut -d: -f1) ; do
++      echo "Enabling swapping to '$SWAPD'"
++      echo "$SWAPD  swap  swap defaults  0  0" >> /mnt/install/etc/fstab
++    done
++
++	  #####
++		#if [ "$installdevice" != "/dev/sda" ]; then
++		#	if [ "$installdevice" != "/dev/sdb" ]; then
++		#		real_device=`echo $installdevice | cut -c6-8`
++		#		sed -i "s/$real_device/sdb/g" /mnt/install/etc/fstab
++		#		sed -i "s/$real_device/sdb/g" /mnt/install/etc/mtab
++		#	fi
++		#fi
++	   #####
++	lsblk -l -o uuid,type,name|grep part| \
++	sed "s, *\([^ ]*\) *[^ ]*  *\([^ ]*\).*,s;/dev/\2;UUID=\1;," > /tmp/part_list
++    if [ ! -f /mnt/install/etc/fstab ]; then
++		echo "No /mnt/install/etc/fstab found. Something should be wrong."
++		echo "Bye."
++	else
++		echo "Updating /mnt/install/etc/fstab paritions with UUID"
++	fi
++	if [ ! -f /mnt/install/etc/fstab.orig ]; then
++		cp /mnt/install/etc/fstab /mnt/install/etc/fstab.orig
++	fi
++	sed -f /tmp/part_list /mnt/install/etc/fstab >dummy
++	mv dummy /mnt/install/etc/fstab
++    ###############
++    # setup services
++    echo "setup services"
++    if [ -r /mnt/install/etc/rc.d/rc.alsa ]; then
++		chmod -x /mnt/install/etc/rc.d/rc.alsa
++	fi
++
++	if [ -r /mnt/install/etc/rc.d/rc.atalk ]; then
++		chmod -x /mnt/install/etc/rc.d/rc.atalk
++	fi
++
++	if [ -r /mnt/install/etc/rc.d/rc.bind ]; then
++		chmod -x /mnt/install/etc/rc.d/rc.bind
++	fi
++
++	if [ -r /mnt/install/etc/rc.d/rc.bluetooth ]; then
++		chmod +x /mnt/install/etc/rc.d/rc.bluetooth
++	fi
++
++	if [ -r /mnt/install/etc/rc.d/rc.cups ]; then
++		chmod +x /mnt/install/etc/rc.d/rc.cups
++	fi
++
++	if [ -r /mnt/install/etc/rc.d/rc.cgmanager ]; then
++		chmod -x /mnt/install/etc/rc.d/rc.cgmanager
++	fi
++
++	if [ -r /mnt/install/etc/rc.d/rc.cgproxy ]; then
++		chmod -x /mnt/install/etc/rc.d/rc.cgproxy
++	fi
++
++	if [ -r /mnt/install/etc/rc.d/rc.dnsmasq ]; then
++		chmod -x /mnt/install/etc/rc.d/rc.dnsmasq
++	fi
++
++	if [ -r /mnt/install/etc/rc.d/rc.fuse ]; then
++		chmod +x /mnt/install/etc/rc.d/rc.fuse
++	fi
++
++	if [ -r /mnt/install/etc/rc.d/rc.hald ]; then
++		chmod +x /mnt/install/etc/rc.d/rc.hald
++	fi
++
++	if [ -r /mnt/install/etc/rc.d/rc.hplip ]; then
++		chmod -x /mnt/install/etc/rc.d/rc.hplip
++	fi
++
++	if [ -r /mnt/install/etc/rc.d/rc.httpd ]; then
++		chmod -x /mnt/install/etc/rc.d/rc.httpd
++	fi
++
++	if [ -r /mnt/install/etc/rc.d/rc.inetd ]; then
++		chmod -x /mnt/install/etc/rc.d/rc.inetd
++	fi
++
++	if [ -r /mnt/install/etc/rc.d/rc.ip_forward ]; then
++		chmod -x /mnt/install/etc/rc.d/rc.ip_forward
++	fi
++
++	if [ -r /mnt/install/etc/rc.d/rc.lprng ]; then
++		chmod -x /mnt/install/etc/rc.d/rc.lprng
++	fi
++
++	if [ -r /mnt/install/etc/rc.d/rc.messagebus ]; then
++		chmod +x /mnt/install/etc/rc.d/rc.messagebus
++	fi
++
++	if [ -r /mnt/install/etc/rc.d/rc.mysqld ]; then
++		chmod -x /mnt/install/etc/rc.d/rc.mysqld
++	fi
++
++	if [ -r /mnt/install/etc/rc.d/rc.networkmanager ]; then
++		chmod +x /mnt/install/etc/rc.d/rc.networkmanager
++	fi
++
++	if [ -r /mnt/install/etc/rc.d/rc.ntpd ]; then
++		chmod +x /mnt/install/etc/rc.d/rc.ntpd
++	fi
++
++	if [ -r /mnt/install/etc/rc.d/rc.pcmcia ]; then
++		chmod -x /mnt/install/etc/rc.d/rc.pcmcia
++	fi
++
++	if [ -r /mnt/install/etc/rc.d/rc.pulseaudio ]; then
++		chmod -x /mnt/install/etc/rc.d/rc.pulseaudio
++	fi
++
++	if [ -r /mnt/install/etc/rc.d/rc.rpc ]; then
++		chmod -x /mnt/install/etc/rc.d/rc.rpc
++	fi
++
++	if [ -r /mnt/install/etc/rc.d/rc.samba ]; then
++		chmod -x /mnt/install/etc/rc.d/rc.samba
++	fi
++
++	if [ -r /mnt/install/etc/rc.d/rc.saslauthd ]; then
++		chmod -x /mnt/install/etc/rc.d/rc.saslauthd
++	fi
++
++	if [ -r /mnt/install/etc/rc.d/rc.sendmail ]; then
++		chmod -x /mnt/install/etc/rc.d/rc.sendmail
++	fi
++
++	if [ -r /mnt/install/etc/rc.d/rc.serial ]; then
++		chmod +x /mnt/install/etc/rc.d/rc.serial
++	fi
++
++	if [ -r /mnt/install/etc/rc.d/rc.snmpd ]; then
++		chmod -x /mnt/install/etc/rc.d/rc.snmpd
++	fi
++
++	if [ -r /mnt/install/etc/rc.d/rc.syslog ]; then
++		chmod +x /mnt/install/etc/rc.d/rc.syslog
++	fi
++
++	if [ -r /mnt/install/etc/rc.d/rc.sshd ]; then
++		chmod -x /mnt/install/etc/rc.d/rc.sshd
++	fi
++
++	if [ -r /mnt/install/etc/rc.d/rc.wicd ]; then
++		chmod +x /mnt/install/etc/rc.d/rc.wicd
++	fi
++
++	if [ -r /mnt/install/etc/rc.d/rc.wireless ]; then
++		chmod +x /mnt/install/etc/rc.d/rc.wireless
++	fi
++    ################### 
++	for dir in sys proc dev tmp; do umount /mnt/install/$dir; done
++
++	if [ "$home_dir" != "" ] && [ "$home_dir" != "$systempart" ]; then
++		echo "umount /mnt/instal/home"
++		umount /mnt/install/home
++	fi
++	echo "umount /mnt/install"
+ 	umount /mnt/install
++
++	echo "remove /mnt/install"
+ 	rmdir /mnt/install
+ 	
++	echo "end installation"
+ 	return 0
+ }
+ 
+@@ -659,7 +1703,17 @@
+ 	moduleslist=$4
+ 	if [ -d "$rootdirectory" ] && [ ! -z "$livedirectory" ]; then
+ 		if [ -z "$moduleslist" ]; then
+-			moduleslist="squashfs:fuse:loop:ehci-pci:xhci-hcd:usb-storage"
++			#moduleslist="squashfs:fuse:loop:ehci-pci:xhci-hcd:usb-storage"
++			#moduleslist="squashfs:fuse:loop:xhci-pci:ehci-pci:usb-storage:ext3:isofs"
++			#moduleslist="squashfs:fuse:loop:xhci-pci:ohci-pci:ehci-pci:xhci-hcd:uhci-hcd:ehci-hcd:usb-storage:hid:usbhid:hid-generic:hid-cherry:hid-logitech:hid-logitech-dj:hid-logitech-hidpp:hid-lenovo:hid-microsoft:jbd:mbcache:ext3:ext4:isofs:fat:nls_cp437:nls_iso8859-1:msdos:vfat"
++			#moduleslist="squashfs:fuse:loop:xhci-pci:ohci-pci:ehci-pci:xhci-hcd:uhci-hcd:ehci-hcd:usb-storage:hid:usbhid:i2c-hid:hid-generic:hid-cherry:hid-logitech:hid-logitech-dj:hid-logitech-hidpp:hid-lenovo:hid-microsoft:hid_multitouch:isofs:nls_cp437:nls_iso8859-1"
++			#moduleslist="squashfs:overlay:loop:xhci-pci:ohci-pci:ehci-pci:xhci-hcd:uhci-hcd:ehci-hcd:usb-storage:hid:usbhid:i2c-hid:hid-generic:hid-cherry:hid-logitech:hid-logitech-dj:hid-logitech-hidpp:hid-lenovo:hid-microsoft:hid_multitouch:ext3:ext4:isofs:nls_cp437:nls_iso8859-1"
++		    
++		    #moduleslist="squashfs:overlay:loop:xhci-pci:ohci-pci:ehci-pci:xhci-hcd:uhci-hcd:ehci-hcd:usb-storage:hid:usbhid:i2c-hid:hid-generic:hid-cherry:hid-logitech:hid-logitech-dj:hid-logitech-hidpp:hid-lenovo:hid-microsoft:hid_multitouch:isofs:nls_cp437:nls_iso8859-1"
++			moduleslist="squashfs:overlay:loop:xhci-pci:ohci-pci:ehci-pci:xhci-hcd:uhci-hcd:ehci-hcd:mmc-core:mmc-block:sdhci:sdhci-pci:sdhci-acpi:usb-storage:hid:usbhid:i2c-hid:hid-generic:hid-apple:hid-asus:hid-cherry:hid-logitech:hid-logitech-dj:hid-logitech-hidpp:hid-lenovo:hid-microsoft:hid_multitouch:isofs:crc32c-intel:fuse:nls_cp437:nls_iso8859-1"
++			
++			#moduleslist="squashfs:overlay:loop:xhci-pci:ohci-pci:ehci-pci:xhci-hcd:uhci-hcd:ehci-hcd:mmc-core:mmc-block:sdhci:sdhci-pci:sdhci-acpi:usb-storage:hid:usbhid:i2c-hid:hid-generic:hid-apple:hid-asus:hid-cherry:hid-logitech:hid-logitech-dj:hid-logitech-hidpp:hid-lenovo:hid-microsoft:hid_multitouch:isofs:crc32c-intel:fuse"
++			#moduleslist="squashfs:overlay:isofs:vfat:ext4:loop:xhci-pci:ehci-pci:usb-storage:usbhid:nls_cp437:nls_iso8859-1"
+ 		fi
+ 		init_live $rootdirectory $livedirectory $moduleslist
+ 	else
+@@ -730,6 +1784,17 @@
+ 	rootdirectory=$2
+ 	systempart=$3
+ 	loadersetup=$4
++	rootpassword=$5
++	username=$6
++	userpassword=$7
++	installation_mode=$8
++	bootloader=$9
++	format_home=${10}
++	SYSINSTALLFS=${11}
++	home_dir=${12}
++	locale=${13}
++	keyboard=${14}
++	
+ 	if [ -d "$rootdirectory" ] && [ -b "$systempart" ]; then
+ 		systemsize=`du -s -m $rootdirectory | sed 's/\t.*//'`
+ 		device=`echo $systempart | cut -c6-8`
+@@ -741,11 +1806,14 @@
+ 			echo "error: insufficant space on device '$systempart'"
+ 			exit $INSUFFICIENTSPACE
+ 		else
+-			install_system $rootdirectory $systempart $loadersetup
++		  if [ "$home_dir" == "" ]; then
++			SYSINSTALLFS="ext4"
++		  fi
++			install_system $rootdirectory $systempart $loadersetup $rootpassword $username $userpassword $installation_mode $bootloader $format_home $SYSINSTALLFS $home_dir $locale $keyboard
+ 			exit $!
+ 		fi
+ 	else
+-		echo "`basename $0` --install root_dir device [-auto|-expert]"
++		echo "`basename $0` --install root_dir device [-auto|-z] rootpassword username userpassword installation_mode bootloader format_home SYSINSTALLFS home_dir locale keyboard"
+ 		exit $CMDERROR
+ 	fi
+ 	;;
+@@ -780,7 +1848,7 @@
+ 	echo "`basename $0` --module root_dir live_dir module_file [-xz|-gzip] [-optional]"
+ 	echo "`basename $0` --iso live_dir iso_file"
+ 	echo "`basename $0` --usb live_dir device"
+-	echo "`basename $0` --install root_dir device [-auto|-expert]"
++	echo "`basename $0` --install root_dir device [-auto|-expert] rootpassword username userpassword [core|basic|full] [grub|lilo] [yes|no] filesystem_type home_dir"
+ 	echo "`basename $0` --share live_dir listen_interface ip_range [modules_list|auto]"
+ 	echo "`basename $0` --unshare"
+ 	exit $CMDERROR
+diff -Naur slackware-live-0.5.4.orig/scripts/init slackware-live-0.5.4/scripts/init
+--- slackware-live-0.5.4.orig/scripts/init	2014-02-07 11:04:23.000000000 +0200
++++ slackware-live-0.5.4/scripts/init	2022-10-09 13:07:31.150211962 +0300
+@@ -1,4 +1,14 @@
+ #!/bin/ash
++# Eric Hameleers <alien@slackware.com> (encryption support)
++
++LIVELABEL="LIVE" #edit in build-slackware-live.sh script too
++#DISTRONAME="Slackel-kde-7.6.0"
++DISTRONAME="Slackel-openbox-7.6.0"
++#DISTRONAME="Slackel-mate-7.6.0"
++
++if [ ! -z "$medialabel" ]; then
++	LIVELABEL=$medialabel
++fi
+ 
+ echo ""
+ echo "*** Live system initialization ***"
+@@ -6,7 +16,17 @@
+ mount -v sysfs /sys -t sysfs
+ 
+ /load_kernel_modules 2>/dev/null
+-sleep 3
++# Sometimes the devices need extra time to be available.
++# A root filesystem on USB is a good example of that.
++if [ ! -z "$wait" ]; then
++	sleep $wait
++else
++	sleep 3
++fi
++
++# Fire at least one blkid:
++#blkid 1>/dev/null 2>/dev/null
++
+ mdev -s
+ 
+ mkdir /tmp #fuse needs /tmp
+@@ -25,42 +45,33 @@
+ 	ifconfig eth0 $address netmask $netmask
+ 	route add default gw $gateway
+ 	mount -t nfs -o nolock $nfsroot /slroot/live/media
+-	title=`cat /slroot/live/media/boot/syslinux/syslinux.cfg | grep "menu title " | cut -f3 -d' '`
+-	echo "$title found on $nfsroot"
+-fi
+-sleeptime=0
+-alreadycheckedpartitions=""
+-while [ "$mediadetected" == "none" ] && [ "$sleeptime" != "10" ]; do #try each seconds, but don't wait (USB) more than 10 seconds
+-	for partition in `cat /proc/partitions | sed -e 1d -e 2d | cut -c26-`; do
+-		if mount -o ro /dev/$partition /slroot/live/media >/dev/null 2>/dev/nul; then
+-			if [ -f /slroot/live/media/boot/liveboot ]; then
+-				if [ "$partition" == "sr0" ] || [ "$partition" == "sr1" ]
+-				then mediadetected="cd"
+-				else mediadetected="sd"
+-				fi
+-				livedevice="/dev/$partition"
+-				title=`cat /slroot/live/media/boot/syslinux/syslinux.cfg | grep "menu title " | cut -f3 -d' '`
+-				echo "$title found on $livedevice"
+-				break
+-			else
+-				umount /slroot/live/media
++	echo "$LIVELABEL found on $nfsroot"
++else
++	sleeptime=0
++	while [ "$mediadetected" = "none" ] && [ "$sleeptime" != "10" ]; do #try each seconds, but don't wait (USB) more than 10 seconds
++		if blkid | grep -q "LABEL=\"$LIVELABEL\""; then
++			livedevice=`blkid | grep "LABEL=\"$LIVELABEL\"" | sed -n 1p | cut -f1 -d:`
++			echo "$DISTRONAME-Live found on $livedevice"
++			mount -o ro $livedevice /slroot/live/media
++			if blkid | grep "LABEL=\"$LIVELABEL\"" | sed -n 1p | grep -q "TYPE=\"iso9660\""
++			then mediadetected="cd"
++			else mediadetected="sd"
+ 			fi
++		else
++			sleep 1
++			let sleeptime+=1
++			mdev -s
+ 		fi
+ 	done
+-	if [ "$mediadetected" == "none" ]; then
+-		sleep 1
+-		let sleeptime+=1
+-		mdev -s
+-	fi
+-done
++fi
+ 
+ if [ "$mediadetected" == "none" ]; then
+ 	echo "*** Live system error - live media not detected - exiting ***"
+ 	sh
+ fi
+ 
+-#copy live-media to RAM if requested
+-if [ "$copy2ram" == "yes" ]; then
++##copy live-media to RAM if requested
++if [ "$copy2ram" = "yes" ]; then
+ 	echo -n "Copying live system to RAM ..."
+ 	mkdir /slroot/live/tmp
+ 	mount --move /slroot/live/media /slroot/live/tmp
+@@ -71,13 +82,16 @@
+ 		cp $bootfile /slroot/live/media/boot/
+ 	done
+ 	cp -r /slroot/live/tmp/boot/syslinux /slroot/live/media/boot/
++	touch /slroot/live/media/boot/
+ 	mkdir /slroot/live/media/boot/modules
+-	for module in /slroot/live/tmp/boot/modules/*; do #first copy main non excluded modules
+-		modulename=`basename $module`
+-		if ! echo $exclude | sed 's/:/\n/g' | grep -q "^$modulename$"; then
+-			cp /slroot/live/tmp/boot/modules/$modulename /slroot/live/media/boot/modules/
+-		fi
+-	done
++	if [ `ls /slroot/live/tmp/boot/modules/ | wc -l` != 0 ]; then
++		for module in /slroot/live/tmp/boot/modules/*; do #first copy main non excluded modules
++			modulename=`basename $module`
++			if ! echo $exclude | sed 's/:/\n/g' | grep -q "^$modulename$"; then
++				cp /slroot/live/tmp/boot/modules/$modulename /slroot/live/media/boot/modules/
++			fi
++		done
++	fi
+ 	mkdir /slroot/live/media/boot/optional
+ 	for modulename in `echo $include | sed 's/:/ /g'`; do #copy included optional modules
+ 		if [ -f /slroot/live/tmp/boot/optional/$modulename ]; then
+@@ -88,7 +102,7 @@
+ 	umount /slroot/live/tmp
+ 	rmdir /slroot/live/tmp
+ 	mount -o remount,ro /slroot/live/media
+-	if [ "$mediadetected" == "cd" ]; then
++	if [ "$mediadetected" = "cd" ]; then
+ 		eject $livedevice
+ 	fi
+ 	echo " done"
+@@ -96,15 +110,19 @@
+ 
+ #mount all modules in /live/modules/* except excluded ones
+ mkdir /slroot/live/modules
+-for module in /slroot/live/media/boot/modules/*; do
+-	modulename=`basename $module`
+-	if ! echo $exclude | sed 's/:/\n/g' | grep -q "^$modulename$"; then #if module is not excluded by bootparam
+-		mkdir /slroot/live/modules/$modulename
+-		mount -o loop -t squashfs $module /slroot/live/modules/$modulename
+-		modulesbranches="/slroot/live/modules/$modulename=ro:$modulesbranches"
+-		echo "Loading SquashFS module $modulename"
+-	fi
+-done
++modulescount=0
++if [ `ls /slroot/live/media/boot/modules/ | wc -l` != 0 ]; then
++	for module in /slroot/live/media/boot/modules/*; do
++		modulename=`basename $module`
++		if ! echo $exclude | sed 's/:/\n/g' | grep -q "^$modulename$"; then #if module is not excluded by bootparam
++			mkdir /slroot/live/modules/$modulename
++			mount -o loop -t squashfs $module /slroot/live/modules/$modulename
++			modulesbranches="/slroot/live/modules/$modulename=ro:$modulesbranches"
++			echo "Loading SquashFS module $modulename"
++			modulescount=$(($modulescount+1))
++		fi
++	done
++fi
+ 
+ #load requested optional modules
+ for modulename in `echo $include | sed 's/:/ /g'`; do
+@@ -113,63 +131,118 @@
+ 		mount -o loop -t squashfs /slroot/live/media/boot/optional/$modulename /slroot/live/modules/$modulename
+ 		modulesbranches="/slroot/live/modules/$modulename=ro:$modulesbranches"
+ 		echo "Loading SquashFS module $modulename"
++		modulescount=$(($modulescount+1))
+ 	fi
+ done
+-aufsmodulesbranches=`echo $modulesbranches | sed 's/:$//'`
+-unionfsmodulesbranches=`echo $aufsmodulesbranches | sed 's/\/slroot//g'`
++
++if [ $modulescount = 0 ]; then 
++	echo -e "\nError: no modules has been loaded"
++	exec sh
++fi
++
++modulesbranches=`echo $modulesbranches | sed 's/:$//'`
++unionfsmodulesbranches=`echo $modulesbranches | sed 's/\/slroot//g'` #TODO: Unionfs-
++overlaymodulesbranches=`echo $modulesbranches | sed 's/=ro//g'`
+ 
+ #mount (union) all modules in /live/system (ro)
+-mkdir /slroot/live/.nochanges #workaround because AUFS doesn't allow read-only union
+ mkdir /slroot/live/system
+-mount -t aufs -o ro,br=/slroot/live/.nochanges=rw:$aufsmodulesbranches none /slroot/live/system 2>/dev/null ||
+-unionfs -o ro,allow_other,suid,dev,use_ino,cow,max_files=524288,chroot=/slroot $unionfsmodulesbranches /slroot/live/system
++if [ $modulescount = 1 ]
++then mount --bind $overlaymodulesbranches /slroot/live/system
++else mount -t overlay -o ro,lowerdir=$overlaymodulesbranches overlay /slroot/live/system 2>/dev/null ||
++		unionfs -o ro,allow_other,suid,dev,use_ino,cow,max_files=524288,chroot=/slroot $unionfsmodulesbranches /slroot/live/system #TODO - (required for NFS)
++fi
++ 
++find_loop() {
++    # The losetup of busybox is different from the real losetup - watch out!
++    lodev=$(losetup -f)
++    if [ -z "$lodev" ]; then
++      # We exhausted the available loop devices, so create the block device:
++      for NOD in $(seq 0 ${MAXLOOPS}); do
++        if [ ! -b /dev/loop${NOD} ]; then
++          mknod -m660 /dev/loop${NOD} b 7 ${NOD}
++          break
++        fi
++      done
++      lodev=/dev/loop${NOD}
++    elif [ ! -b $lodev ]; then
++      # We exhausted the available loop devices, so create the block device:
++      mknod -m660 $lodev b 7 $(echo $lodev |sed %/dev/loop%%)
++    fi
++    echo "$lodev"
++  }
+ 
+ #setup persistent system changes
+ if [ ! -z "$changes" ] && [ ! "$copy2ram" == "yes" ] && [ "$mediadetected" != "cd" ]; then
+-	mkdir /slroot/live/changes
++		echo "Using persistent system storage ($changes)"
+ 	if [ "$mediadetected" == "sd" ]; then
+-		if [ ! -b $changes ]; then
+-			mount -o remount,rw /slroot/live/media
+-		fi
++		mkdir -p /slroot/live/$changes
+ 		if echo $changes | grep -q "="; then
+ 			filesize=`echo "$changes" | cut -f2 -d=`
+ 			changes=`echo "$changes" | cut -f1 -d=`
+ 		fi
+-		if [ ! -d /slroot/live/media/$changes ] && [ ! -f /slroot/live/media/$changes ] && [ ! -b $changes ]; then #storage space creation
+-			if  [ ! -z "$filesize" ]; then
+-				echo "Creating $changes ($filesize MB) persistent system storage ..."
+-				dd if=/dev/zero of=/slroot/live/media/$changes bs=1024k count=0 seek=$filesize #TODO: check available space
+-				sleep 1
+-				mkfs.ext3 -F /slroot/live/media/$changes
+-				sleep 1
+-			else
+-				#if mount | grep -q "$livedevice on /slroot/live/media type ext3"; then #TODO: check FS type
++		if [ ! -d /slroot/live/media/$changes ] && [ ! -f /slroot/live/media/$changes ]; then #storage space creation
++			#if  [ ! -z "$filesize" ]; then
++			#	echo "Creating $changes ($filesize MB) persistent system storage ..."
++			#	dd if=/dev/zero of=/slroot/live/media/$changes bs=1024k count=0 seek=$filesize #TODO: check available space
++			#	sleep 1
++			#	mkfs.ext3 -F /slroot/live/media/$changes
++			#	sleep 1
++			#else
++				if mount | grep -q "$livedevice on /slroot/live/media type ext3"; then #TODO: check FS type
++				echo "mount $livedevice on /slroot/live/media type ext3"
++				mount -o remount,rw /slroot/live/media
+ 				mkdir -p /slroot/live/media/$changes
+-				#fi
+-			fi
++				fi
++			#fi
+ 		fi
+-		if [ -d /slroot/live/media/$changes ] || [ -f /slroot/live/media/$changes ] || [ -b $changes ]; then
+-			echo "Using persistent system storage ($changes)"
+-			if [ -b $changes ]
+-			then mount $changes /slroot/live/changes
+-			else
+-				if [ -d /slroot/live/media/$changes ]
+-				then mount --bind /slroot/live/media/$changes /slroot/live/changes
+-				else mount -o loop /slroot/live/media/$changes /slroot/live/changes
++		if [ -f /slroot/live/media/$changes ];	then ## setup persistent file   
++			mount -o remount,rw /slroot/live/media
++			## add these here for persistent
++			# Find a free loop device to mount the persistence container file:
++			prdev=$(find_loop)
++			losetup $prdev /slroot/live/media/$changes
++			# Check if the persistence container is LUKS encrypted:
++			if cryptsetup isLuks $prdev 1>/dev/null 2>/dev/null ; then
++				echo "Unlocking LUKS encrypted persistence file '/${changes}'"
++				cryptsetup luksOpen $prdev $(basename ${changes}) </dev/tty0 >/dev/tty0 2>&1
++				if [ $? -ne 0 ]; then
++					echo "${DISTRONAME}:  Failed to unlock persistence file '/${changes}'."
++					echo "${DISTRONAME}:  Falling back to RAM."
++				else
++				# LUKS properly unlocked; from now on use the mapper device instead:
++				prdev=/dev/mapper/$(basename ${changes})
+ 				fi
+ 			fi
++			prfs=$(blkid $prdev |rev |cut -d'"' -f2 |rev)
++			mount -t $prfs $prdev /slroot/live/$changes 2>/dev/null
++			##
++			#mount -o loop /slroot/live/media/$changes /slroot/live/$changes
+ 		fi
++		
++		if	[ -d /slroot/live/media/$changes ]; then ## setup persistent folder only for ext3,4 usb filesystem
++			mount -o remount,rw /slroot/live/media
++			mount --bind /slroot/live/media/$changes /slroot/live/$changes
++		fi	
+ 	else
+ 		echo "Using persistent system storage ($changes)"
+-		mount -t nfs -o nolock $changes /slroot/live/changes #TODO: no auth / security
++		mkdir -p /slroot/live/$changes
++		mount -t nfs -o nolock $changes /slroot/live/$changes #TODO: no auth / security
+ 	fi
+ fi
+ 
+ #mount (union) all modules (ro) and /live/changes (rw) in /live/union (rw)
+-mkdir /slroot/live/union
+-mkdir -p /slroot/live/changes
+-mount -t aufs -o br=/slroot/live/changes=rw:$aufsmodulesbranches none /slroot/live/union 2>/dev/null ||
+-unionfs -o allow_other,suid,dev,use_ino,cow,max_files=524288,chroot=/slroot /live/changes=rw:$unionfsmodulesbranches /slroot/live/union
++if [ ! -z "$changes" ]; then
++	UPPERDIR=/slroot/live/$changes/changes
++	WORKOVLDIR=/slroot/live/$changes/ofswd
++else
++	UPPERDIR=/slroot/live/changes
++	WORKOVLDIR=/slroot/live/ofswd
++fi
++mkdir -p /slroot/live/union
++[ ! -d ${UPPERDIR} ] && mkdir -p ${UPPERDIR}
++[ ! -d ${WORKOVLDIR} ] && mkdir -p ${WORKOVLDIR}
++mount -t overlay -o workdir=${WORKOVLDIR},upperdir=${UPPERDIR},lowerdir=$overlaymodulesbranches overlay /slroot/live/union 2>/dev/null ||
++	unionfs -o allow_other,suid,dev,use_ino,cow,max_files=524288,chroot=/slroot /live/changes=rw:$unionfsmodulesbranches /slroot/live/union #TODO - (required for NFS)
+ 
+ #setup system tree
+ for directory in /slroot/live/union/*; do #bind /live/union top directories into /
+@@ -184,62 +257,76 @@
+ mknod /slroot/dev/console c 5 1 2>/dev/null
+ mknod /slroot/dev/null c 1 3 2>/dev/null #needed to mount /proc (rc.S) on read-only filesystem
+ cat > /slroot/live/union/etc/fstab << END
+-proc /proc proc defaults 0 0
+-sysfs /sys sysfs defaults 0 0
+-none / tmpfs defaults 0 0
++proc      /proc       proc        defaults   0   0
++sysfs     /sys        sysfs       defaults   0   0
++tmpfs     /tmp        tmpfs       defaults,nodev,nosuid,mode=1777  0   0
++tmpfs     /var/tmp    tmpfs       defaults,nodev,nosuid,mode=1777  0   0
++tmpfs     /dev/shm    tmpfs       defaults,nodev,nosuid,mode=1777  0   0
++devpts    /dev/pts    devpts      gid=5,mode=620   0   0
++none      /           tmpfs       defaults   1   1
++
+ END
+ 
+ #system startup tweaking
+ if [ ! -z "$changes" ]; then
+-	cp -f /slroot/live/system/etc/rc.d/rc.S /slroot/live/union/etc/rc.d/
+-	cp -f /slroot/live/system/etc/rc.d/rc.M /slroot/live/union/etc/rc.d/
+-	cp -f /slroot/live/system/etc/rc.d/rc.modules /slroot/live/union/etc/rc.d/
++	#cp -f /slroot/live/system/etc/rc.d/rc.S /slroot/live/union/etc/rc.d/
++	#cp -f /slroot/live/system/etc/rc.d/rc.M /slroot/live/union/etc/rc.d/
++	#cp -f /slroot/live/system/etc/rc.d/rc.modules /slroot/live/union/etc/rc.d/
+ 	rm -f /slroot/live/union/etc/udev/rules.d/70-persistent-net.rules
+ fi
++
+ touch /slroot/live/union/etc/fastboot
++# Disable the root filesystem check altogether:
++sed -i -e '/^if \[ ! \$READWRITE = yes/,/^fi # Done checking root filesystem/s/^/#/' /slroot/live/union/etc/rc.d/rc.S
+ echo "cat /proc/mounts | grep -v '^rootfs' > /etc/mtab" >> /slroot/live/union/etc/rc.d/rc.S #update /etc/mtab
+ echo "mount -o remount,rw /live/media" >> /slroot/live/union/etc/rc.d/rc.S
+-if [ "$fastboot" == "yes" ]; then #faster startup (actions already done by "build-slackware-live.sh --sysprep")
+-	sed	-e 's@\(.*/usr/bin/fc-cache -f.*\)@  : #\1@' \
+-		-e 's@\(.*rc.udev start\)@      : #\1@' \
+-		-e 's@\(.*icon.*${theme_dir}.*\)@      : #\1@' \
+-		-e 's@\(.*/usr/bin/update.*--verbose\)@  : #\1@' \
+-		-e 's@\(.*/usr/bin/update-mime-database /usr/share/mime\)@  : #\1@' \
+-		-e 's@^\(.*/sbin/ldconfig &\)$@  : #\1@' \
++if [ "$fastboot" = "yes" ]; then #faster startup (actions already done by "build-slackware-live.sh --sysprep")
++	echo "Enabling fast boot"
++	sed	-e 's@^\( */usr/bin/fc-cache.*\)$@: #\1@' \
++		-e 's@^\( */bin/sh /etc/rc.d/rc.udev\)$@: #\1@' \
++		-e 's@^\( */usr/bin/gtk-update.*\)$@: #\1@' \
++		-e 's@^\( */usr/bin/update-gdk.*\)$@: #\1@' \
++		-e 's@^\( */usr/bin/update-gtk.*\)$@: #\1@' \
++		-e 's@^\( */usr/bin/update-mime-database.*\)$@: #\1@' \
++		-e 's@^\( */usr/bin/update-pango.*\)$@: #\1@' \
++		-e 's@^\( */usr/bin/glib-compile-schemas.*\)$@: #\1@' \
++		-e 's@^\( */sbin/ldconfig.*\)$@: #\1@' \
+ 		-i /slroot/live/union/etc/rc.d/rc.M
+-	sed	-e 's@^\(.*\)\(/sbin/depmod .*\)$@\1: #\2@' \
+-		-e 's@\(.*\)\(NEWMODS=.*\)@\1: #\2@' \
++	sed	-e 's@^\( */sbin/depmod.*\)$@: #\1@' \
+ 		-i /slroot/live/union/etc/rc.d/rc.modules
+ fi
+-if [ -x /slroot/live/union/etc/rc.d/rc.fuse ]; then
+-	chmod a-x /slroot/live/union/etc/rc.d/rc.fuse
+-fi
+-if [ "$mediadetected" == "nfs" ] && [ -x /slroot/live/union/etc/rc.d/rc.networkmanager ]; then 
++if [ "$mediadetected" = "nfs" ] && [ -x /slroot/live/union/etc/rc.d/rc.networkmanager ]; then 
+ 	chmod -x /slroot/live/union/etc/rc.d/rc.networkmanager #if enabled, system hangs
++elif ! [ -x /slroot/live/union/etc/rc.d/rc.wicd -a -x /slroot/live/union/usr/sbin/wicd ]; then
++	chmod +x /slroot/live/union/etc/rc.d/rc.networkmanager
+ fi
+ 
+ #system shutdown tweaking
+-if [ ! -z "$changes" ]; then
+-	cp -f /slroot/live/system/etc/rc.d/rc.6 /slroot/live/union/etc/rc.d/
+-fi
++#if [ ! -z "$changes" ]; then
++	#cp -f /slroot/live/system/etc/rc.d/rc.6 /slroot/live/union/etc/rc.d/
++#fi
+ sed -i 's/\(\/rc.[06]\)\( fast\)*/\1 fast/' /slroot/live/union/etc/inittab #to prevent system hang at shutdown
+-sed 	-e 's@^\( *\)\([a-z/]*sleep.*\)@\1: #\2@' \
++sed -e 's@^\( *\)\([a-z/]*sleep.*\)@\1: #\2@' \
+ 	-e 's@^\( *\)\([a-z/]*sync\)@\1: #\2@' \
+ 	-e 's@^\(.*umount.*\)$@\1 \>/dev/null 2\>\&1@' \
+ 	-i /slroot/live/union/etc/rc.d/rc.6
++sed -e 's@^\(.*umount -v -a -t no,proc,sysfs.*\)$@umount -v -a -t no,overlay,unionfs,proc,sysfs \>/dev/null 2\>\&1@' -i /slroot/live/union/etc/rc.d/rc.6
++sed -e 's@^\(.*umount -v -a -l -f -r -t nfs,smbfs,cifs.*\)$@umount -v -a -l -f -r -t nfs,smbfs,cifs \>/dev/null 2\>\&1@' -i /slroot/live/union/etc/rc.d/rc.6
++sed -e 's@^\(.*umount -v -a -t no,proc,sysfs.*\)$@umount -v -a -t no,proc,sysfs \>/dev/null 2\>\&1@' -i /slroot/live/union/etc/rc.d/rc.6
++
+ if [ -z "$changes" ]
+-then sed -e 's@^\(.*-o remount.*\)$@mount -o remount,ro /live/media #\1\n/bin/sync\n/bin/sleep 3@' -i /slroot/live/union/etc/rc.d/rc.6
+-else sed -e 's@^\(.*-o remount.*\)$@mount -o remount,ro /live/media\nmount -o remount,ro /live/changes #\1\nsync; sleep 3@' \
++then sed -e 's@^\(.*-o remount.*\)$@/bin/mount -o remount,ro /live/media \>/dev/null 2\>\&1 #\1\n/bin/sync\n/bin/sleep 3@' -i /slroot/live/union/etc/rc.d/rc.6
++else sed -e 's@^\(.*-o remount.*\)$@/bin/mount -o remount,ro /live/media \>/dev/null 2\>\&1\nmount -o remount,ro /live/changes \>/dev/null 2\>\&1 #\1\nsync; sleep 3@' \
+ 	-i /slroot/live/union/etc/rc.d/rc.6
+ fi
+-if [ "$mediadetected" == "nfs" ]; then
++if [ "$mediadetected" = "nfs" ]; then
+ 	sed -e 's@^\( *\)\([a-z/]*fuser.*\)@\1: #\2@' \
+ 		-e 's@^\( *\)\([a-z/]*dhcpcd -k.*\)@\1: #\2@' \
+ 		-e 's@^\( *\)\(\. /etc/rc\.d/rc\.inet1 stop\)@\1: #\2@' \
+ 		-e 's@-t \(nfs,\)\(.*\)@-t \2 #\1@' \
+ 		-i /slroot/live/union/etc/rc.d/rc.6
+ fi
+-if [ "$mediadetected" == "cd" ] && [ ! "$copy2ram" == "yes" ]; then
++if [ "$mediadetected" = "cd" ] && [ ! "$copy2ram" = "yes" ]; then
+ 	sed	-e "s@\(/sbin/reboot\)@reboot -w; shutdown -k now \>/dev/null\n  cdrecord --eject dev=$livedevice \>/dev/null 2\>\&1\n  sleep 5\n  \1@" \
+ 		-e "s@\(/sbin/poweroff\)@poweroff -w; shutdown -k now \>/dev/null\n  cdrecord --eject dev=$livedevice \>/dev/null 2\>\&1\n  sleep 5\n  \1@" \
+ 		-i /slroot/live/union/etc/rc.d/rc.6
+@@ -247,6 +334,7 @@
+ 
+ #setup persistent homedir
+ if [ ! -z "$home" ] && [ ! "$copy2ram" == "yes" ] && [ "$mediadetected" != "cd" ]; then
++	echo "Setting up persistent home directory ($home)"
+ 	uid=1000
+ 	if [ -z "`grep "^[^:]\+:x:$uid:" /slroot/live/union/etc/passwd | cut -f1 -d:`" ]; then
+ 		uid=0
+@@ -254,44 +342,67 @@
+ 	homedir=`grep "x:$uid:" /slroot/live/union/etc/passwd | cut -f6 -d:`
+ 	gid=`grep "x:$uid:" /slroot/live/union/etc/passwd | cut -f4 -d:`
+ 	if [ "$mediadetected" == "sd" ]; then
+-		if  [ ! -b $home ]; then
+-			mount -o remount,rw /slroot/live/media
+-		fi
+ 		if echo $home | grep -q "="; then
+ 			filesize=`echo "$home" | cut -f2 -d=`
+ 			home=`echo "$home" | cut -f1 -d=`
+ 		fi
+-		if [ ! -d /slroot/live/media/$home ] && [ ! -f /slroot/live/media/$home ] && [ ! -b $home ]; then #storage space creation
+-			if  [ ! -z "$filesize" ]; then
+-				echo "Creating $home ($filesize MB) persistent home directory ..."
+-				dd if=/dev/zero of=/slroot/live/media/$home bs=1024k count=0 seek=$filesize #TODO: check available space
+-				sleep 1
+-				mkfs.ext3 -F /slroot/live/media/$home
+-				sleep 1
+-				mount -o loop /slroot/live/media/$home /slroot/$homedir
+-				cp -dpR /slroot/live/union/etc/skel/.??* /slroot/$homedir/
+-				cp -dpR /slroot/live/union/etc/skel/* /slroot/$homedir/
+-				chown -R $uid:$gid /slroot/$homedir
+-				umount /slroot/$homedir
+-			else
+-				#if mount | grep -q "$livedevice on /slroot/live/media type ext3"; then #TODO: check FS type (vfat not supported)
+-				mkdir -p /slroot/live/media/$home
+-				cp -dpR /slroot/live/union/etc/skel/.??* /slroot/live/media/$home/
+-				cp -dpR /slroot/live/union/etc/skel/* /slroot/live/media/$home/
+-				chown -R $uid:$gid /slroot/live/media/$home
+-				#fi
+-			fi
++		if [ ! -d /slroot/live/media/$home ] && [ ! -f /slroot/live/media/$home ]; then #storage space creation
++			#if  [ ! -z "$filesize" ]; then
++			#	echo "Creating $home ($filesize MB) persistent home directory ..."
++			#	dd if=/dev/zero of=/slroot/live/media/$home bs=1024k count=0 seek=$filesize #TODO: check available space
++			#	sleep 1
++			#	mkfs.ext3 -F /slroot/live/media/$home
++			#	sleep 1
++			#	mount -o loop /slroot/live/media/$home /slroot/$homedir
++			#	cp -dpR /slroot/live/union/etc/skel/.??* /slroot/$homedir/
++			#	cp -dpR /slroot/live/union/etc/skel/* /slroot/$homedir/
++			#	chown -R $uid:$gid /slroot/$homedir
++			#	umount /slroot/$homedir
++			#else
++				if mount | grep -q "$livedevice on /slroot/live/media type ext3"; then #TODO: check FS type (vfat not supported)
++					mount -o remount,rw /slroot/live/media
++					mkdir -p /slroot/live/media/$home
++					cp -dpR /slroot/live/union/etc/skel/.??* /slroot/live/media/$home/
++					cp -dpR /slroot/live/union/etc/skel/* /slroot/live/media/$home/
++					cp  /slroot/live/union/$homedir/Desktop/* /slroot/live/media/$home/Desktop
++					chown -R $uid:$gid /slroot/live/media/$home
++				fi
++			#fi
+ 		fi
+-		if [ -d /slroot/live/media/$home ] || [ -f /slroot/live/media/$home ] || [ -b $home ]; then
+-			echo "Setting up persistent home directory ($home)"
+-			if [ -b $home ]; then
+-				mount $home /slroot/$homedir
+-			else
+-				if [ -d /slroot/live/media/$home ]
+-				then mount --bind /slroot/live/media/$home /slroot/$homedir
+-				else mount -o loop /slroot/live/media/$home /slroot/$homedir
++		
++		if [ -f /slroot/live/media/$home ];	then # home directory in persistent file 
++			mount -o remount,rw /slroot/live/media
++			## add these here for persistent
++			# Find a free loop device to mount the persistence container file:
++			prdev=$(find_loop)
++			losetup $prdev /slroot/live/media/$home
++			# Check if the persistence container is LUKS encrypted:
++			if cryptsetup isLuks $prdev 1>/dev/null 2>/dev/null ; then
++				echo "Unlocking LUKS encrypted persistence file '/${changes}'"
++				cryptsetup luksOpen $prdev $(basename ${home}) </dev/tty0 >/dev/tty0 2>&1
++				if [ $? -ne 0 ]; then
++					echo "${DISTRONAME}:  Failed to unlock persistence file '/${changes}'."
++					echo "${DISTRONAME}:  Falling back to RAM."
++				else
++				# LUKS properly unlocked; from now on use the mapper device instead:
++				prdev=/dev/mapper/$(basename ${home})
+ 				fi
+ 			fi
++			prfs=$(blkid $prdev |rev |cut -d'"' -f2 |rev)
++			mount -t $prfs $prdev /slroot/$homedir 2>/dev/null
++			if [ ! -f /slroot/$homedir/.xinitrc ]; then
++				cp -dpR /slroot/live/union/etc/skel/.??* /slroot/$homedir/
++				cp -dpR /slroot/live/union/etc/skel/* /slroot/$homedir
++				cp  /slroot/live/union/$homedir/Desktop/* /slroot/$homedir/Desktop
++				chown -R $uid:$gid /slroot/$homedir
++			fi	
++			##			
++			#mount -o loop /slroot/live/media/$home /slroot/live/media/$homedir
++		fi
++		if [ -d /slroot/live/media/$home ]; then # persistent home directory
++			mount -o remount,rw /slroot/live/media
++			mkdir -p /slroot/live/media/$home
++			mount --bind /slroot/live/media/$home /slroot/$homedir
+ 		fi
+ 	else
+ 		echo "Setting up persistent home directory ($home)"
+@@ -299,22 +410,25 @@
+ 	fi
+ fi
+ 
+-#runlevel boot parameter handling 
++#runlevel boot parameter handling
+ if [ ! -z "$runlevel" ]; then
+ 	echo "Setting up runlevel ($runlevel)"
+ 	sed -i s/^id:[1-5]:initdefault:$/id:$runlevel:initdefault:/ /slroot/live/union/etc/inittab
+ fi
+ 
+-#autologin
++#autologin (runlevel 5)
+ runlevel=`cat /slroot/live/union/etc/inittab | sed -n /^id:[1-5]:initdefault:$/p | cut -f2 -d:`
+-if [ $runlevel == 5 ]; then
+-	sed -i 's/^c1:.*$/c1:5:respawn:\/sbin\/agetty -a linomad 38400 tty1 linux/' /slroot/live/union/etc/inittab
++if [ $runlevel = 5 ]; then
++	login=`cat /slroot/live/union/etc/passwd | grep ":1000:" | cut -f1 -d:`
++	if [ -z "$login" ]; then login="root"; fi
++	echo "Setting up autologin (login=$login)"
++	sed -i "s/^c1:.*$/c1:5:respawn:\/sbin\/agetty -a $login 38400 tty1 linux/" /slroot/live/union/etc/inittab
+ 	
+ 	if [ -x /slroot/live/union/usr/bin/startx ]; then
+-		cat  > /slroot/live/union/etc/profile.d/x.sh << END
+-if [ -z "\$DISPLAY" ] && [ "\`id -u\`" != "0" ] && [ "\`tty\`" == "/dev/tty1" ]; then
+-	startx
+-	logout
++	cat  > /slroot/live/union/etc/profile.d/x.sh << END
++if [ -z "\$DISPLAY" ] && [ "\`id -u\`" != "0" ] && [ "\`tty\`" = "/dev/tty1" ]; then
++startx
++logout
+ fi
+ END
+ 		chmod +x /slroot/live/union/etc/profile.d/x.sh
+@@ -328,30 +442,67 @@
+ 	then sed -i s/^export\ LANG=.*/export\ LANG=$locale/ /slroot/live/union/etc/profile.d/lang.sh
+ 	else echo "export LANG=$locale" >> /slroot/live/union/etc/profile.d/lang.sh
+ 	fi
++	if [ -f /slroot/live/union/etc/kde/kdm/kdmrc ]; then
++      locale_noutf8=$(echo $locale | sed 's/\.utf8//')
++      sed -i "s/\(^\|^#\)Language=.*/Language=$locale_noutf8/" /slroot/live/union/etc/kde/kdm/kdmrc
++    fi    
++    LIBSUFFIX=
++	[ -d /slroot/live/union/usr/lib64 ] && LIBSUFFIX=64
++  # Make firefox match OS locale
++  # Now included in $DISTRONAME version, but keep it for other Slackware version or distro
++  #if [ -w /slroot/live/union/usr/lib$LIBSUFFIX/firefox/greprefs/all.js ]; then
++  # sed -i -e 's/pref("intl.locale.matchOS", false);/pref("intl.locale.matchOS", true);/g' /slroot/live/union/usr/lib$LIBSUFFIX/firefox/greprefs/all.js
++  #fi
++  if [ -w /slroot/live/union/usr/lib$LIBSUFFIX/firefox-*/defaults/pref/langpacks.js ]; then
++	sed -i -e 's/pref("intl.locale.matchOS", false);/pref("intl.locale.matchOS", true);/g' /slroot/live/union/usr/lib$LIBSUFFIX/firefox-*/defaults/pref/langpacks.js
++  fi
++  # Make thunderbird match OS locale
++  # Now included in $DISTRONAME version, but keep it for other Slackware version or distro
++  #if [ -w /slroot/live/union/usr/lib$LIBSUFFIX/thunderbird/greprefs/all.js ]; then
++  #  sed -i -e 's/pref("intl.locale.matchOS", false);/pref("intl.locale.matchOS", true);/g' /slroot/live/union/usr/lib$LIBSUFFIX/thunderbird/greprefs/all.js
++  #fi
++  if [ -w /slroot/live/union/usr/lib$LIBSUFFIX/thunderbird-*/defaults/pref/langpacks.js ]; then
++    sed -i -e 's/pref("intl.locale.matchOS", false);/pref("intl.locale.matchOS", true);/g' /slroot/live/union/usr/lib$LIBSUFFIX/thunderbird-*/defaults/pref/langpacks.js
++  fi
+ fi
+ 
+ if [ ! -z "$keymap" ]; then
+-	echo "Setting up keymap ($keymap)"
+-	cat > /slroot/live/union/etc/rc.d/rc.keymap <<END
+-#!/bin/sh
+-if [ -x /usr/bin/loadkeys ]; then
+-  /usr/bin/loadkeys $keymap
+-fi
+-END
+-	chmod +x /slroot/live/union/etc/rc.d/rc.keymap
+-	
+-	if [ -d /slroot/live/union/etc/X11/xorg.conf.d ]; then #Xorg UDev keyboard configuration
+-		xkblayout=`echo $keymap | cut -c1-2`
+-		echo "Setting up Xorg keymap layout ($xkblayout)"
+-		cat > /slroot/live/union/etc/X11/xorg.conf.d/20-keyboard.conf << END
++ keyb=$keymap
++ if [ -n "$keyb" ] || [-n "$numlock" ] || [ -n "$scim" ] || [ -n "$ibus" ]; then
++  # keyboard settting
++  [ -n "$keyb" ] || keyb=us
++  [ -n "$numlock" ] || numlock=off
++  [ -n "$scim" ] || scim=off
++  [ -n "$ibus" ] || ibus=off
++ 
++ grep "^$keyb|.*|.*|.*" /keymaps | sed -e "s/^.*|\(.*\)|\(.*\)|\(.*\)/\1|\2|\3/" > /slroot/live/union/tmp/xkb
++    xkblayout="$(sed -e "s/^\(.*\)|.*|.*/\1/" /slroot/live/union/tmp/xkb)"
++    xkbvariant="$(sed -e "s/^.*|\(.*\)|.*/\1/" /slroot/live/union/tmp/xkb)"
++    xkboptions="$(sed -e "s/^.*|.*|\(.*\)/\1/" /slroot/live/union/tmp/xkb)"
++    rm /slroot/live/union/tmp/xkb
++    # Fall back to keymap if no xkb maping available
++    if [ -z "$xkblayout" ]; then
++      xkblayout="$keyb"
++      xkbvariant=""
++      xkboptions=""
++    fi
++    /usr/bin/loadkeys -u $keyb.map 1>&2 2>/dev/null
++    if [ -e /slroot/live/union/etc/rc.d/rc.keymap ]; then
++      sed -i "s/\(^[ \t]*\/usr\/bin\/loadkeys -u\).*$/\1 $keyb.map/" /slroot/live/union/etc/rc.d/rc.keymap
++    fi
++    if [ -e /slroot/live/union/etc/X11/xorg.conf.d ]; then
++      cat <<EOF > /slroot/live/union/etc/X11/xorg.conf.d/10-keymap.conf
+ Section "InputClass"
+-	Identifier "keyboard-all"
+-	Driver "evdev"
+-	Option "XkbLayout" "$xkblayout"
+-	MatchIsKeyboard "on"
++Identifier "Keyboard settings"
++MatchIsKeyboard "yes"
++Driver "evdev"
++Option "XkbLayout" "$xkblayout"
++Option "XkbVariant" "$xkbvariant"
++Option "XkbOptions" "$xkboptions"
+ EndSection
+-END
++EOF
+ 	fi
++ fi
+ fi
+ 
+ if [ ! -z "$tz" ]; then
+@@ -373,23 +524,36 @@
+ fi
+ 
+ #detect fixed partitions
+-for partition in /sys/block/sd?/sd*; do
+-	device=`echo $partition | cut -f4 -d/`
+-	partition=`echo $partition | cut -f5 -d/`
+-	if [ "$partition" != "sd*" ] && [ "`cat /sys/block/$device/removable`" == "0" ]; then
+-		if swapon /dev/$partition >/dev/null 2>/dev/null; then
+-			swapoff /dev/$partition
+-			if [ "$useswap" == "yes" ]; then
++blkid | while read line; do
++	partition=`echo $line | cut -f1 -d: | cut -c 6-`
++	device=`echo $partition | cut -c1-3`
++	type=`echo $line | sed 's/^.*TYPE=\"\([^\"]*\)\".*$/\1/'`
++	loopdevice=`echo $partition | cut -c-4`
++	if [ "$loopdevice" != "loop" ] && [ "`cat /sys/block/$device/removable`" = "0" ]; then
++		if [ "$type" = "swap" ]; then
++			if [ "$useswap" = "yes" ]; then
+ 				echo "Enabling swap on /dev/$partition"
+ 				echo "/dev/$partition none swap defaults 0 0" >> /slroot/live/union/etc/fstab
+ 			else
+ 				echo "/dev/$partition none swap defaults,noauto 0 0" >> /slroot/live/union/etc/fstab
+ 			fi
+-		else
+-			echo "/dev/$partition /mnt/$partition auto defaults,noauto,user 0 0" >> /slroot/live/union/etc/fstab
+-			mkdir -p /slroot/live/union/mnt/$partition
++		#else
++		#	echo "Detected /dev/$partition ($type)"
++		#	echo "/dev/$partition /mnt/$partition $type defaults,noauto,user 0 0" >> /slroot/live/union/etc/fstab
++		#	mkdir -p /slroot/live/union/mnt/$partition
++		elif [ "$type" = "vfat" ] && [ "$LIBSUFFIX" = "64" ]; then
++				mkdir -p /slroot/live/union/boot/efi
++			    mount -t vfat /dev/$partition /slroot/live/union/boot/efi 2>/dev/null
++				if [ -d /slroot/live/union/boot/efi/EFI ]; then
++					echo "Adding EFI partition /dev/$partition to /etc/fstab"
++					echo "/dev/$partition /boot/efi vfat defaults 1 0" >> /slroot/live/union/etc/fstab
++				    umount /slroot/live/union/boot/efi 2>/dev/null
++				else
++					umount /slroot/live/union/boot/efi 2>/dev/null
++					rm -rf /slroot/live/union/boot/efi
++				fi
+ 		fi
+-	fi
++	fi	
+ done
+ 
+ #setup root password
+@@ -404,10 +568,7 @@
+ umount /proc
+ umount /sys
+ mount -r -o remount /slroot 2>/dev/null #remount root directory read-only for normal startup
+-sed -i 's/READWRITE=yes/:/' /slroot/etc/rc.d/rc.S 2>/dev/null #aufs doesn't allow remounting (claiming it is busy)
++
+ echo "*** Live system ready ***"
+-if [ ! -z "$debug" ]; then
+-	sleep $debug
+-fi
+ echo ""
+-exec switch_root /slroot /sbin/init
++exec switch_root /slroot /sbin/init || exec sh
