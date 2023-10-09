@@ -1,62 +1,17 @@
-diff -Naur slackware-live-0.5.4.orig/doc/AUTHORS slackware-live-0.5.4/doc/AUTHORS
---- slackware-live-0.5.4.orig/doc/AUTHORS	2016-07-23 13:43:45.245305000 +0300
-+++ slackware-live-0.5.4/doc/AUTHORS	2017-07-30 23:22:25.000000000 +0300
-@@ -1,5 +1,6 @@
- Developpers:
- - Dimitris Tzemos <dijemos@gmail.com> (corrections for slackel,salix)
-+- Eric Hameleers <alien@slackware.com> (encryption support)
- - Frank Endres <frankendres@tuxfamily.org>
- - Sebastian Reisse <sebastian.j.reisse@gmx.net>
- 
-diff -Naur slackware-live-0.5.4.orig/doc/COPYING slackware-live-0.5.4/doc/COPYING
---- slackware-live-0.5.4.orig/doc/COPYING	2014-02-06 20:06:57.000000000 +0200
-+++ slackware-live-0.5.4/doc/COPYING	2017-07-30 23:45:34.000000000 +0300
-@@ -1,3 +1,5 @@
-+- Dimitris Tzemos <dijemos@gmail.com> (corrections for slackel,salix)
-+- Eric Hameleers <alien@slackware.com> (encryption support)
- Slackware-Live, Copyright Frank Endres, 2010-2014
- 
- This software is governed by the CeCILL license under french 
-diff -Naur slackware-live-0.5.4.orig/doc/ChangeLog slackware-live-0.5.4/doc/ChangeLog
---- slackware-live-0.5.4.orig/doc/ChangeLog	2016-07-23 13:39:20.968785000 +0300
-+++ slackware-live-0.5.4/doc/ChangeLog	2017-07-30 23:46:21.000000000 +0300
-@@ -1,4 +1,5 @@
- 2015-10-11: Slackware-Live-0.4.5:
-+	+ Eric Hameleers <alien@slackware.com> (encryption support)
- 	+ added support to format partitions using different filesystems (btrfs,ext2,ext3,ext4,reiserfs,jfs,xfs) by [Dimitris Tzemos <dijemos@gmail.com>]
- 2015-01-15: Slackware-Live-0.4.3: fixed EFI installation
- 	+ fixed fstab (added /dev/shm tmpfs, needed for Chromium Web browser for example)
-diff -Naur slackware-live-0.5.4.orig/doc/README slackware-live-0.5.4/doc/README
---- slackware-live-0.5.4.orig/doc/README	2014-02-06 20:12:04.000000000 +0200
-+++ slackware-live-0.5.4/doc/README	2017-07-30 23:49:14.000000000 +0300
-@@ -1,9 +1,11 @@
- Slackware Live is a live DVD/USB/NFS build and install tool written for Slackware (& Slackware64) Linux:
-+- Dimitris Tzemos <dijemos@gmail.com> (corrections for slackel,salix)
-+- Eric Hameleers <alien@slackware.com> (encryption support)
- - support GPT and legacy MBR partitionned disks, UEFI and CSM (legacy / BIOS) booting
- - contains all the necessary to convert an installed system to a live system and vice-versa;
--- it doesn't need any kernel recompile, but it support seamlessly AUFS and SquashFS-XZ/LZMA if your kernel support them;
-+- it doesn't need any kernel recompile (using overlayfs);
- - no changes are needed on the system to make live; the live system boots like an installed one (100% compatible with stock Slackware);
- - support persistent changes;
- - ...
- 
--A GUI for the installation program and a synchronization tool (for home directory backup/restore) are provided separately;
-+A GUI for the installation program (SLI) is provided separately.
-diff -Naur slackware-live-0.5.4.orig/scripts/build-slackware-live.sh slackware-live-0.5.4/scripts/build-slackware-live.sh
---- slackware-live-0.5.4.orig/scripts/build-slackware-live.sh	2014-02-11 22:32:24.000000000 +0200
-+++ slackware-live-0.5.4/scripts/build-slackware-live.sh	2022-10-09 13:08:01.618673463 +0300
+diff -Naur slackware-live-0.5_orig/scripts/build-slackware-live.sh slackware-live-0.5/scripts/build-slackware-live.sh
+--- slackware-live-0.5_orig/scripts/build-slackware-live.sh	2014-02-11 22:32:24.000000000 +0200
++++ slackware-live-0.5/scripts/build-slackware-live.sh	2023-10-09 20:06:32.039005160 +0300
 @@ -1,4 +1,16 @@
  #!/bin/sh
 +#Dimitris Tzemos <dijemos@gmail.com> (changes for slackel,salix)
 +# Eric Hameleers <alien@slackware.com> (encryption support)
 +
 +LIVELABEL="LIVE" #edit in init script too
-+#SLACKEL_FLAVOR="Slackel-kde-7.6.0"
++#SLACKEL_FLAVOR="Slackel-kde-7.7.0"
 +#SLACKEL_FLAVOR_LILO="Slackel-kde"
-+SLACKEL_FLAVOR="Slackel-openbox-7.6.0"
++SLACKEL_FLAVOR="Slackel-openbox-7.7.0"
 +SLACKEL_FLAVOR_LILO="Slackel-openbox"
-+#SLACKEL_FLAVOR="Slackel-mate-7.6.0"
++#SLACKEL_FLAVOR="Slackel-mate-7.7.0"
 +#SLACKEL_FLAVOR_LILO="Slackel-mate"
 +
 +#LIVEFSOPTS="-O ^has_journal"
@@ -676,7 +631,7 @@ diff -Naur slackware-live-0.5.4.orig/scripts/build-slackware-live.sh slackware-l
  		if lsmod | grep -q $SYSINSTALLFS; then
  			moduleslist="$SYSINSTALLFS"
  		fi
-@@ -445,16 +740,33 @@
+@@ -445,24 +740,46 @@
  		done
  		moduleslist=`echo $moduleslist | sed 's/:$//'`
  		if [ ! -z "$moduleslist" ] && [ "$moduleslist" != "sg" ]; then
@@ -711,9 +666,15 @@ diff -Naur slackware-live-0.5.4.orig/scripts/build-slackware-live.sh slackware-l
  		installdevice=`echo $systempart | cut -c1-8`
 +		echo "Setting (e)Lilo"
  		if [ -d /sys/firmware/efi ]; then #UEFI
- 			modprobe efivars
+-			modprobe efivars
++			if [ "$(/bin/ls /sys/firmware/efi/efivars 2> /dev/null | wc -l)" = "0" ]; then
++				echo "Make sure efivarfs is active since we'll need it to"
++				echo "mount efivars"
++				modprobe efivarfs
++				mount -t efivarfs efivarfs /sys/firmware/efi/efivars
++			fi	
  			efipartnum=`gdisk -l $installdevice | grep "EF00" | sed 's/  \+/ /g' | cut -f2 -d' '`
-@@ -462,7 +774,7 @@
+ 			efipartition="$installdevice$efipartnum"
  			if [ ! -z "$efipartition" ]; then
  				mkdir -p /mnt/efi
  				mount $efipartition /mnt/efi
@@ -722,7 +683,7 @@ diff -Naur slackware-live-0.5.4.orig/scripts/build-slackware-live.sh slackware-l
  				if [ -d /mnt/efi/EFI/$efilabel ]; then
  					conflictpart=`cat /mnt/efi/EFI/$efilabel/elilo.conf | grep "append" | sed 's/.*root=\([^ ]*\).*/\1/'`
  					if [ "$conflictpart" == "$systempart" ]
-@@ -476,27 +788,69 @@
+@@ -476,27 +793,69 @@
  				cp /mnt/install/boot/vmlinuz /mnt/efi/EFI/$efilabel/
  				cat > /mnt/efi/EFI/$efilabel/elilo.conf << EOF
  timeout=1
@@ -780,7 +741,7 @@ diff -Naur slackware-live-0.5.4.orig/scripts/build-slackware-live.sh slackware-l
 +				if [ "$installdevice" != "/dev/sdb" ]; then
 +						real_device=`echo $installdevice | cut -c6-8`
 +						sed -i "s/$real_device/sdb/g" /mnt/efi/EFI/BOOT/elilo.conf
-+						sed -i "s/$real_device/sdb/g" /mnt/install/etc/fstab
++						#sed -i "s/$real_device/sdb/g" /mnt/install/etc/fstab
 +				fi
 +				umount /mnt/efi
 +				rmdir /mnt/efi
@@ -798,7 +759,7 @@ diff -Naur slackware-live-0.5.4.orig/scripts/build-slackware-live.sh slackware-l
  bmp-colors = 255,0,255,0,255,0
  bmp-table = 60,6,1,16
  bmp-timer = 65,27,0,255
-@@ -514,11 +868,12 @@
+@@ -514,11 +873,12 @@
  
  image = /boot/vmlinuz
  root = $systempart
@@ -813,7 +774,7 @@ diff -Naur slackware-live-0.5.4.orig/scripts/build-slackware-live.sh slackware-l
  			fi
  			windowspartition=`fdisk -l $installdevice 2>/dev/null | grep "^$installdevice.*\*.*\(NTFS\|FAT32\)" | cut -f1 -d' '`
  			if [ ! -z "$windowspartition" ]; then
-@@ -529,16 +884,705 @@
+@@ -529,16 +889,711 @@
  table = $installdevice
  EOF
  			fi
@@ -846,7 +807,13 @@ diff -Naur slackware-live-0.5.4.orig/scripts/build-slackware-live.sh slackware-l
 +		#if [ -d /sys/firmware/efi ] && [ ! -z "$efipartnum" ]; then #EFI
 +		if [ ! -z "$efipartnum" ] && [ -d $grublibdir/x86_64-efi ]; then
 +			efipartition="$installdevice$efipartnum"
-+			#modprobe efivars #for efibootmgr; unneded here: done by grub install
++			if [ "$(/bin/ls /sys/firmware/efi/efivars 2> /dev/null | wc -l)" = "0" ]; then
++					echo "Make sure efivarfs is active since we'll need it to"
++					echo "mount efivarfs to efivars"
++					modprobe efivarfs
++					mount -t efivarfs efivarfs /sys/firmware/efi/efivars
++			fi		
++			#======
 +			mkdir -p /mnt/efi
 +			mount $efipartition /mnt/efi
 +			if  [ `uname -m` != "x86_64" ] ; then #modprobe efivars fails on 32 bits Slackware
@@ -1522,7 +1489,7 @@ diff -Naur slackware-live-0.5.4.orig/scripts/build-slackware-live.sh slackware-l
  	return 0
  }
  
-@@ -659,7 +1703,17 @@
+@@ -659,7 +1714,17 @@
  	moduleslist=$4
  	if [ -d "$rootdirectory" ] && [ ! -z "$livedirectory" ]; then
  		if [ -z "$moduleslist" ]; then
@@ -1541,7 +1508,7 @@ diff -Naur slackware-live-0.5.4.orig/scripts/build-slackware-live.sh slackware-l
  		fi
  		init_live $rootdirectory $livedirectory $moduleslist
  	else
-@@ -730,6 +1784,17 @@
+@@ -730,6 +1795,17 @@
  	rootdirectory=$2
  	systempart=$3
  	loadersetup=$4
@@ -1559,7 +1526,7 @@ diff -Naur slackware-live-0.5.4.orig/scripts/build-slackware-live.sh slackware-l
  	if [ -d "$rootdirectory" ] && [ -b "$systempart" ]; then
  		systemsize=`du -s -m $rootdirectory | sed 's/\t.*//'`
  		device=`echo $systempart | cut -c6-8`
-@@ -741,11 +1806,14 @@
+@@ -741,11 +1817,14 @@
  			echo "error: insufficant space on device '$systempart'"
  			exit $INSUFFICIENTSPACE
  		else
@@ -1576,7 +1543,7 @@ diff -Naur slackware-live-0.5.4.orig/scripts/build-slackware-live.sh slackware-l
  		exit $CMDERROR
  	fi
  	;;
-@@ -780,7 +1848,7 @@
+@@ -780,7 +1859,7 @@
  	echo "`basename $0` --module root_dir live_dir module_file [-xz|-gzip] [-optional]"
  	echo "`basename $0` --iso live_dir iso_file"
  	echo "`basename $0` --usb live_dir device"
@@ -1585,17 +1552,17 @@ diff -Naur slackware-live-0.5.4.orig/scripts/build-slackware-live.sh slackware-l
  	echo "`basename $0` --share live_dir listen_interface ip_range [modules_list|auto]"
  	echo "`basename $0` --unshare"
  	exit $CMDERROR
-diff -Naur slackware-live-0.5.4.orig/scripts/init slackware-live-0.5.4/scripts/init
---- slackware-live-0.5.4.orig/scripts/init	2014-02-07 11:04:23.000000000 +0200
-+++ slackware-live-0.5.4/scripts/init	2022-10-09 13:07:31.150211962 +0300
+diff -Naur slackware-live-0.5_orig/scripts/init slackware-live-0.5/scripts/init
+--- slackware-live-0.5_orig/scripts/init	2014-02-07 11:04:23.000000000 +0200
++++ slackware-live-0.5/scripts/init	2023-10-09 20:09:05.508548536 +0300
 @@ -1,4 +1,14 @@
  #!/bin/ash
 +# Eric Hameleers <alien@slackware.com> (encryption support)
 +
 +LIVELABEL="LIVE" #edit in build-slackware-live.sh script too
-+#DISTRONAME="Slackel-kde-7.6.0"
-+DISTRONAME="Slackel-openbox-7.6.0"
-+#DISTRONAME="Slackel-mate-7.6.0"
++#DISTRONAME="Slackel-kde-7.7.0"
++DISTRONAME="Slackel-openbox-7.7.0"
++#DISTRONAME="Slackel-mate-7.7.0"
 +
 +if [ ! -z "$medialabel" ]; then
 +	LIVELABEL=$medialabel
@@ -2141,7 +2108,7 @@ diff -Naur slackware-live-0.5.4.orig/scripts/init slackware-live-0.5.4/scripts/i
  fi
  END
  		chmod +x /slroot/live/union/etc/profile.d/x.sh
-@@ -328,30 +442,67 @@
+@@ -328,36 +442,74 @@
  	then sed -i s/^export\ LANG=.*/export\ LANG=$locale/ /slroot/live/union/etc/profile.d/lang.sh
  	else echo "export LANG=$locale" >> /slroot/live/union/etc/profile.d/lang.sh
  	fi
@@ -2227,7 +2194,16 @@ diff -Naur slackware-live-0.5.4.orig/scripts/init slackware-live-0.5.4/scripts/i
  fi
  
  if [ ! -z "$tz" ]; then
-@@ -373,23 +524,36 @@
+ 	if [ -f /slroot/usr/share/zoneinfo/$tz ]; then
+-		cat /slroot/usr/share/zoneinfo/$tz > /slroot/etc/localtime
+-		ln -sf /usr/share/zoneinfo/$tz /slroot/etc/localtime-copied-from
++		#cat /slroot/usr/share/zoneinfo/$tz > /slroot/etc/localtime
++		ln -sf /usr/share/zoneinfo/$tz /slroot/etc/localtime
++ 		ln -sf /usr/share/zoneinfo/$tz /slroot/etc/localtime-copied-from
+ 	fi
+ fi
+ if [ ! -z "$hwc" ]; then
+@@ -373,23 +525,36 @@
  fi
  
  #detect fixed partitions
@@ -2275,7 +2251,7 @@ diff -Naur slackware-live-0.5.4.orig/scripts/init slackware-live-0.5.4/scripts/i
  done
  
  #setup root password
-@@ -404,10 +568,7 @@
+@@ -404,10 +569,7 @@
  umount /proc
  umount /sys
  mount -r -o remount /slroot 2>/dev/null #remount root directory read-only for normal startup
