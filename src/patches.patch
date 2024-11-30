@@ -1,6 +1,6 @@
 diff -Naur slackware-live-0.5_orig/scripts/build-slackware-live.sh slackware-live-0.5/scripts/build-slackware-live.sh
 --- slackware-live-0.5_orig/scripts/build-slackware-live.sh	2014-02-11 22:32:24.000000000 +0200
-+++ slackware-live-0.5/scripts/build-slackware-live.sh	2023-10-09 20:06:32.039005160 +0300
++++ slackware-live-0.5/scripts/build-slackware-live.sh	2024-11-30 14:34:57.324405227 +0200
 @@ -1,4 +1,16 @@
  #!/bin/sh
 +#Dimitris Tzemos <dijemos@gmail.com> (changes for slackel,salix)
@@ -1554,7 +1554,7 @@ diff -Naur slackware-live-0.5_orig/scripts/build-slackware-live.sh slackware-liv
  	exit $CMDERROR
 diff -Naur slackware-live-0.5_orig/scripts/init slackware-live-0.5/scripts/init
 --- slackware-live-0.5_orig/scripts/init	2014-02-07 11:04:23.000000000 +0200
-+++ slackware-live-0.5/scripts/init	2023-10-09 20:09:05.508548536 +0300
++++ slackware-live-0.5/scripts/init	2024-11-30 15:14:44.678702570 +0200
 @@ -1,4 +1,14 @@
  #!/bin/ash
 +# Eric Hameleers <alien@slackware.com> (encryption support)
@@ -1589,29 +1589,12 @@ diff -Naur slackware-live-0.5_orig/scripts/init slackware-live-0.5/scripts/init
  mdev -s
  
  mkdir /tmp #fuse needs /tmp
-@@ -25,42 +45,33 @@
+@@ -25,22 +45,68 @@
  	ifconfig eth0 $address netmask $netmask
  	route add default gw $gateway
  	mount -t nfs -o nolock $nfsroot /slroot/live/media
 -	title=`cat /slroot/live/media/boot/syslinux/syslinux.cfg | grep "menu title " | cut -f3 -d' '`
 -	echo "$title found on $nfsroot"
--fi
--sleeptime=0
--alreadycheckedpartitions=""
--while [ "$mediadetected" == "none" ] && [ "$sleeptime" != "10" ]; do #try each seconds, but don't wait (USB) more than 10 seconds
--	for partition in `cat /proc/partitions | sed -e 1d -e 2d | cut -c26-`; do
--		if mount -o ro /dev/$partition /slroot/live/media >/dev/null 2>/dev/nul; then
--			if [ -f /slroot/live/media/boot/liveboot ]; then
--				if [ "$partition" == "sr0" ] || [ "$partition" == "sr1" ]
--				then mediadetected="cd"
--				else mediadetected="sd"
--				fi
--				livedevice="/dev/$partition"
--				title=`cat /slroot/live/media/boot/syslinux/syslinux.cfg | grep "menu title " | cut -f3 -d' '`
--				echo "$title found on $livedevice"
--				break
--			else
--				umount /slroot/live/media
 +	echo "$LIVELABEL found on $nfsroot"
 +else
 +	sleeptime=0
@@ -1623,20 +1606,72 @@ diff -Naur slackware-live-0.5_orig/scripts/init slackware-live-0.5/scripts/init
 +			if blkid | grep "LABEL=\"$LIVELABEL\"" | sed -n 1p | grep -q "TYPE=\"iso9660\""
 +			then mediadetected="cd"
 +			else mediadetected="sd"
- 			fi
++			fi
 +		else
 +			sleep 1
 +			let sleeptime+=1
 +			mdev -s
- 		fi
- 	done
--	if [ "$mediadetected" == "none" ]; then
--		sleep 1
--		let sleeptime+=1
--		mdev -s
--	fi
--done
-+fi
++		fi
++	done
+ fi
++
++##### boot from iso image file #####
++# Add the following in /etc/grub.d/40_custom
++# Note that if grub.cfg exists in the same partition with iso file image 
++# then uncomment the line probe -u $root --set=rootuuid
++# If grub.cfg exists in a different partition than iso file image
++# then uncomment the line rootuuid=c7afb2c3-c68e-4040-b7a6-60e545834b75
++# and replace rootuuid= with the rootuuid partition where iso file exists.
++# If iso file path is different then have to replace isofile= with the real file iso path
++
++### BEGIN /etc/grub.d/40_custom ###
++## This file provides an easy way to add custom menu entries.  Simply type the
++## menu entries you want to add after this comment.  Be careful not to change
++## the 'exec tail' line above.
++# menuentry 'Slackel OS 7.7.2 - Openbox (64 Bits)'	{
++#	#probe -u $root --set=rootuuid
++#	#rootuuid=c7afb2c3-c68e-4040-b7a6-60e545834b75
++#	search --set root -u $rootuuid
++#	set isofile='ISO/slackellive64-openbox-7.7.2.iso'
++#	loopback loop ($root)/$isofile
++#	parameters="max_loop=255 vga=791 locale=el_GR.utf8 keymap=gr useswap=yes copy2ram=no tz=europe/Athens hwc=localtime runlevel=4"
++#	linux (loop)/boot/vmlinuz fromiso=$isofile $parameters
++#	initrd (loop)/boot/initrd.gz
++#	}
++### END /etc/grub.d/40_custom ###
+ sleeptime=0
+-alreadycheckedpartitions=""
+-while [ "$mediadetected" == "none" ] && [ "$sleeptime" != "10" ]; do #try each seconds, but don't wait (USB) more than 10 seconds
+-	for partition in `cat /proc/partitions | sed -e 1d -e 2d | cut -c26-`; do
+-		if mount -o ro /dev/$partition /slroot/live/media >/dev/null 2>/dev/nul; then
+-			if [ -f /slroot/live/media/boot/liveboot ]; then
++while [ "$mediadetected" == "none" ] && [ ! -z "$fromiso" ] && [ "$sleeptime" != "10" ]; do #try each seconds, but don't wait (USB) more than 10 seconds
++	#for partition in `cat /proc/partitions | sed -e 1d -e 2d | cut -c26-`; do
++	#for partition in $(blkid |cut -d: -f1 | sed -r "s/.{5}//") ; do
++	for partition in $(blkid |cut -d: -f1 | sed "s:/dev/::g") ; do
++		if mount -o ro /dev/$partition /slroot/live/media >/dev/null 2>/dev/null; then
++			if [ -f /slroot/live/media/$fromiso ]; then
+ 				if [ "$partition" == "sr0" ] || [ "$partition" == "sr1" ]
+ 				then mediadetected="cd"
+ 				else mediadetected="sd"
+ 				fi
+ 				livedevice="/dev/$partition"
+-				title=`cat /slroot/live/media/boot/syslinux/syslinux.cfg | grep "menu title " | cut -f3 -d' '`
+-				echo "$title found on $livedevice"
++				umount /slroot/live/media
++				mkdir /slroot/live/isodev
++				mount -o ro $livedevice /slroot/live/isodev
++				mount -o ro /slroot/live/isodev/$fromiso /slroot/live/media
++				mediadetected="sd"
++				echo "$DISTRONAME-Live found on $livedevice/$fromiso"
+ 				break
+ 			else
+ 				umount /slroot/live/media
+@@ -53,14 +119,15 @@
+ 		mdev -s
+ 	fi
+ done
++##### end boot from iso image file #####
  
  if [ "$mediadetected" == "none" ]; then
  	echo "*** Live system error - live media not detected - exiting ***"
@@ -1650,7 +1685,7 @@ diff -Naur slackware-live-0.5_orig/scripts/init slackware-live-0.5/scripts/init
  	echo -n "Copying live system to RAM ..."
  	mkdir /slroot/live/tmp
  	mount --move /slroot/live/media /slroot/live/tmp
-@@ -71,13 +82,16 @@
+@@ -71,13 +138,16 @@
  		cp $bootfile /slroot/live/media/boot/
  	done
  	cp -r /slroot/live/tmp/boot/syslinux /slroot/live/media/boot/
@@ -1673,7 +1708,7 @@ diff -Naur slackware-live-0.5_orig/scripts/init slackware-live-0.5/scripts/init
  	mkdir /slroot/live/media/boot/optional
  	for modulename in `echo $include | sed 's/:/ /g'`; do #copy included optional modules
  		if [ -f /slroot/live/tmp/boot/optional/$modulename ]; then
-@@ -88,7 +102,7 @@
+@@ -88,7 +158,7 @@
  	umount /slroot/live/tmp
  	rmdir /slroot/live/tmp
  	mount -o remount,ro /slroot/live/media
@@ -1682,7 +1717,7 @@ diff -Naur slackware-live-0.5_orig/scripts/init slackware-live-0.5/scripts/init
  		eject $livedevice
  	fi
  	echo " done"
-@@ -96,15 +110,19 @@
+@@ -96,15 +166,19 @@
  
  #mount all modules in /live/modules/* except excluded ones
  mkdir /slroot/live/modules
@@ -1711,7 +1746,7 @@ diff -Naur slackware-live-0.5_orig/scripts/init slackware-live-0.5/scripts/init
  
  #load requested optional modules
  for modulename in `echo $include | sed 's/:/ /g'`; do
-@@ -113,63 +131,118 @@
+@@ -113,63 +187,118 @@
  		mount -o loop -t squashfs /slroot/live/media/boot/optional/$modulename /slroot/live/modules/$modulename
  		modulesbranches="/slroot/live/modules/$modulename=ro:$modulesbranches"
  		echo "Loading SquashFS module $modulename"
@@ -1863,7 +1898,7 @@ diff -Naur slackware-live-0.5_orig/scripts/init slackware-live-0.5/scripts/init
  
  #setup system tree
  for directory in /slroot/live/union/*; do #bind /live/union top directories into /
-@@ -184,62 +257,76 @@
+@@ -184,62 +313,76 @@
  mknod /slroot/dev/console c 5 1 2>/dev/null
  mknod /slroot/dev/null c 1 3 2>/dev/null #needed to mount /proc (rc.S) on read-only filesystem
  cat > /slroot/live/union/etc/fstab << END
@@ -1967,7 +2002,7 @@ diff -Naur slackware-live-0.5_orig/scripts/init slackware-live-0.5/scripts/init
  	sed	-e "s@\(/sbin/reboot\)@reboot -w; shutdown -k now \>/dev/null\n  cdrecord --eject dev=$livedevice \>/dev/null 2\>\&1\n  sleep 5\n  \1@" \
  		-e "s@\(/sbin/poweroff\)@poweroff -w; shutdown -k now \>/dev/null\n  cdrecord --eject dev=$livedevice \>/dev/null 2\>\&1\n  sleep 5\n  \1@" \
  		-i /slroot/live/union/etc/rc.d/rc.6
-@@ -247,6 +334,7 @@
+@@ -247,6 +390,7 @@
  
  #setup persistent homedir
  if [ ! -z "$home" ] && [ ! "$copy2ram" == "yes" ] && [ "$mediadetected" != "cd" ]; then
@@ -1975,7 +2010,7 @@ diff -Naur slackware-live-0.5_orig/scripts/init slackware-live-0.5/scripts/init
  	uid=1000
  	if [ -z "`grep "^[^:]\+:x:$uid:" /slroot/live/union/etc/passwd | cut -f1 -d:`" ]; then
  		uid=0
-@@ -254,44 +342,67 @@
+@@ -254,44 +398,67 @@
  	homedir=`grep "x:$uid:" /slroot/live/union/etc/passwd | cut -f6 -d:`
  	gid=`grep "x:$uid:" /slroot/live/union/etc/passwd | cut -f4 -d:`
  	if [ "$mediadetected" == "sd" ]; then
@@ -2074,7 +2109,7 @@ diff -Naur slackware-live-0.5_orig/scripts/init slackware-live-0.5/scripts/init
  		fi
  	else
  		echo "Setting up persistent home directory ($home)"
-@@ -299,22 +410,25 @@
+@@ -299,22 +466,25 @@
  	fi
  fi
  
@@ -2108,7 +2143,7 @@ diff -Naur slackware-live-0.5_orig/scripts/init slackware-live-0.5/scripts/init
  fi
  END
  		chmod +x /slroot/live/union/etc/profile.d/x.sh
-@@ -328,36 +442,74 @@
+@@ -328,36 +498,74 @@
  	then sed -i s/^export\ LANG=.*/export\ LANG=$locale/ /slroot/live/union/etc/profile.d/lang.sh
  	else echo "export LANG=$locale" >> /slroot/live/union/etc/profile.d/lang.sh
  	fi
@@ -2203,7 +2238,7 @@ diff -Naur slackware-live-0.5_orig/scripts/init slackware-live-0.5/scripts/init
  	fi
  fi
  if [ ! -z "$hwc" ]; then
-@@ -373,23 +525,36 @@
+@@ -373,23 +581,36 @@
  fi
  
  #detect fixed partitions
@@ -2251,7 +2286,7 @@ diff -Naur slackware-live-0.5_orig/scripts/init slackware-live-0.5/scripts/init
  done
  
  #setup root password
-@@ -404,10 +569,7 @@
+@@ -404,10 +625,7 @@
  umount /proc
  umount /sys
  mount -r -o remount /slroot 2>/dev/null #remount root directory read-only for normal startup
