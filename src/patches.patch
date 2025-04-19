@@ -1,17 +1,17 @@
 diff -Naur slackware-live-0.5_orig/scripts/build-slackware-live.sh slackware-live-0.5/scripts/build-slackware-live.sh
 --- slackware-live-0.5_orig/scripts/build-slackware-live.sh	2014-02-11 22:32:24.000000000 +0200
-+++ slackware-live-0.5/scripts/build-slackware-live.sh	2024-11-30 14:34:57.324405227 +0200
++++ slackware-live-0.5/scripts/build-slackware-live.sh	2025-04-19 14:42:46.485129944 +0300
 @@ -1,4 +1,16 @@
  #!/bin/sh
 +#Dimitris Tzemos <dijemos@gmail.com> (changes for slackel,salix)
 +# Eric Hameleers <alien@slackware.com> (encryption support)
 +
 +LIVELABEL="LIVE" #edit in init script too
-+#SLACKEL_FLAVOR="Slackel-kde-7.7.0"
++#SLACKEL_FLAVOR="Slackel-kde-7.7.3"
 +#SLACKEL_FLAVOR_LILO="Slackel-kde"
-+SLACKEL_FLAVOR="Slackel-openbox-7.7.0"
++SLACKEL_FLAVOR="Slackel-openbox-7.7.3"
 +SLACKEL_FLAVOR_LILO="Slackel-openbox"
-+#SLACKEL_FLAVOR="Slackel-mate-7.7.0"
++#SLACKEL_FLAVOR="Slackel-mate-7.7.3"
 +#SLACKEL_FLAVOR_LILO="Slackel-mate"
 +
 +#LIVEFSOPTS="-O ^has_journal"
@@ -547,8 +547,8 @@ diff -Naur slackware-live-0.5_orig/scripts/build-slackware-live.sh slackware-liv
 +	ROOTNAME=$(echo $ROOTPART|sed "s,/dev/,,")
 +	ROOTUUID=$(lsblk -l -o name,uuid|grep ^$ROOTNAME|sed "s/[^ ]*[[:space:]]*//")
 +	#FSTYPE=$(lsblk -l -o name,fstype|grep ^$ROOTNAME|sed "s/[^ ]*[[:space:]]*//")
-+	#ROOTDEVICE=/dev/$(lsblk -l -o name,pkname|grep ^$ROOTNAME|sed "s/[^ ]*[[:space:]]*//")
-+	#BRAND=$(grep ^NAME /mnt/etc/os-release|sed "s/.*=//")
++	ROOTDEVICE=/dev/$(lsblk -l -o name,pkname|grep ^$ROOTNAME|sed "s/[^ ]*[[:space:]]*//")
++	BRAND=$(grep ^NAME /mnt/etc/os-release|sed "s/.*=//")
 +	#################
 +	echo "Setting up fstab"
  	#FSTab begin
@@ -631,7 +631,7 @@ diff -Naur slackware-live-0.5_orig/scripts/build-slackware-live.sh slackware-liv
  		if lsmod | grep -q $SYSINSTALLFS; then
  			moduleslist="$SYSINSTALLFS"
  		fi
-@@ -445,24 +740,46 @@
+@@ -445,24 +740,47 @@
  		done
  		moduleslist=`echo $moduleslist | sed 's/:$//'`
  		if [ ! -z "$moduleslist" ] && [ "$moduleslist" != "sg" ]; then
@@ -663,7 +663,9 @@ diff -Naur slackware-live-0.5_orig/scripts/build-slackware-live.sh slackware-liv
 +   if [ "$bootloader" == "lilo" ]; then
  	#LiLo begin
  	if [ "$loadersetup" == "-auto" ]; then
- 		installdevice=`echo $systempart | cut -c1-8`
+-		installdevice=`echo $systempart | cut -c1-8`
++		#installdevice=`echo $systempart | cut -c1-8`
++        installdevice=$ROOTDEVICE
 +		echo "Setting (e)Lilo"
  		if [ -d /sys/firmware/efi ]; then #UEFI
 -			modprobe efivars
@@ -683,7 +685,7 @@ diff -Naur slackware-live-0.5_orig/scripts/build-slackware-live.sh slackware-liv
  				if [ -d /mnt/efi/EFI/$efilabel ]; then
  					conflictpart=`cat /mnt/efi/EFI/$efilabel/elilo.conf | grep "append" | sed 's/.*root=\([^ ]*\).*/\1/'`
  					if [ "$conflictpart" == "$systempart" ]
-@@ -476,27 +793,69 @@
+@@ -476,27 +794,69 @@
  				cp /mnt/install/boot/vmlinuz /mnt/efi/EFI/$efilabel/
  				cat > /mnt/efi/EFI/$efilabel/elilo.conf << EOF
  timeout=1
@@ -733,16 +735,16 @@ diff -Naur slackware-live-0.5_orig/scripts/build-slackware-live.sh slackware-liv
 +
 +image=/EFI/BOOT/vmlinuz
 +    label=$SLACKEL_FLAVOR
-+    append="root=$systempart ro"
++    append="root=UUID=$ROOTUUID ro"
 +	read-only
 +	initrd=/EFI/BOOT/initrd.gz
 +EOF
 +
-+				if [ "$installdevice" != "/dev/sdb" ]; then
-+						real_device=`echo $installdevice | cut -c6-8`
-+						sed -i "s/$real_device/sdb/g" /mnt/efi/EFI/BOOT/elilo.conf
-+						#sed -i "s/$real_device/sdb/g" /mnt/install/etc/fstab
-+				fi
++				#if [ "$installdevice" != "/dev/sdb" ]; then
++				#		real_device=`echo $installdevice | cut -c6-8`
++				#		sed -i "s/$real_device/sdb/g" /mnt/efi/EFI/BOOT/elilo.conf
++				#		#sed -i "s/$real_device/sdb/g" /mnt/install/etc/fstab
++				#fi
 +				umount /mnt/efi
 +				rmdir /mnt/efi
 +			fi	
@@ -759,11 +761,13 @@ diff -Naur slackware-live-0.5_orig/scripts/build-slackware-live.sh slackware-liv
  bmp-colors = 255,0,255,0,255,0
  bmp-table = 60,6,1,16
  bmp-timer = 65,27,0,255
-@@ -514,11 +873,12 @@
+@@ -513,12 +873,13 @@
+ compact
  
  image = /boot/vmlinuz
- root = $systempart
+-root = $systempart
 -label = Linux
++root = UUID=$ROOTUUID "
 +label = $SLACKEL_FLAVOR_LILO
  read-only
  EOF
@@ -774,7 +778,7 @@ diff -Naur slackware-live-0.5_orig/scripts/build-slackware-live.sh slackware-liv
  			fi
  			windowspartition=`fdisk -l $installdevice 2>/dev/null | grep "^$installdevice.*\*.*\(NTFS\|FAT32\)" | cut -f1 -d' '`
  			if [ ! -z "$windowspartition" ]; then
-@@ -529,16 +889,711 @@
+@@ -529,16 +890,712 @@
  table = $installdevice
  EOF
  			fi
@@ -784,24 +788,24 @@ diff -Naur slackware-live-0.5_orig/scripts/build-slackware-live.sh slackware-liv
 -			chroot /mnt/install umount /proc
 +			#chroot /mnt/install umount /proc
 +			#####
-+			if [ "$installdevice" != "/dev/sda" ]; then
-+				if [ "$installdevice" != "/dev/sdb" ]; then
-+					real_device=`echo $installdevice | cut -c6-8`
-+					sed -i "s/$real_device/sdb/g" /mnt/install/etc/lilo.conf
-+				fi
-+			fi
++			#if [ "$installdevice" != "/dev/sda" ]; then
++			#	if [ "$installdevice" != "/dev/sdb" ]; then
++			#		real_device=`echo $installdevice | cut -c6-8`
++			#		sed -i "s/$real_device/sdb/g" /mnt/install/etc/lilo.conf
++			#	fi
++			#fi
 +			#####	
 +			
- 		fi
- 	fi
--	#LiLo end
++		fi
++	fi
 +   fi #LiLo end
 +  
 +   if [ "$bootloader" == "grub" ]; then
 +	#grub begin
 +	if [ "$loadersetup" == "-auto" ]; then
 +		grustatus=$GRUBERROR
-+		installdevice=`echo $systempart | cut -c1-8`
++		#installdevice=`echo $systempart | cut -c1-8`
++		installdevice=$ROOTDEVICE
 +		echo "Installing Grub Boot Loader on $installdevice"
 +		efipartnum=`gdisk -l $installdevice 2>/dev/null | grep " EF00 " | sed 's/  */:/g' | cut -f2 -d:`
 +		#if [ -d /sys/firmware/efi ] && [ ! -z "$efipartnum" ]; then #EFI
@@ -836,7 +840,7 @@ diff -Naur slackware-live-0.5_orig/scripts/build-slackware-live.sh slackware-liv
 +				umount /mnt/efi
 +				rmdir /mnt/efi
 +			fi	
-+		fi
+ 		fi
 +		#else #CSM
 +		
 +			if echo -e "print\nquit" | parted $installdevice | grep -q ": msdos$" || 
@@ -1181,7 +1185,8 @@ diff -Naur slackware-live-0.5_orig/scripts/build-slackware-live.sh slackware-liv
 +# defined in the GDM System Defaults configuration file.
 +#
 +EOF
-+	fi
+ 	fi
+-	#LiLo end
  	
 +	if [ -f /mnt/install/etc/slim.conf ]; then
 +	cat > /mnt/install/etc/slim.conf << EOF
@@ -1489,7 +1494,7 @@ diff -Naur slackware-live-0.5_orig/scripts/build-slackware-live.sh slackware-liv
  	return 0
  }
  
-@@ -659,7 +1714,17 @@
+@@ -659,7 +1716,17 @@
  	moduleslist=$4
  	if [ -d "$rootdirectory" ] && [ ! -z "$livedirectory" ]; then
  		if [ -z "$moduleslist" ]; then
@@ -1508,7 +1513,7 @@ diff -Naur slackware-live-0.5_orig/scripts/build-slackware-live.sh slackware-liv
  		fi
  		init_live $rootdirectory $livedirectory $moduleslist
  	else
-@@ -730,6 +1795,17 @@
+@@ -730,6 +1797,17 @@
  	rootdirectory=$2
  	systempart=$3
  	loadersetup=$4
@@ -1526,7 +1531,7 @@ diff -Naur slackware-live-0.5_orig/scripts/build-slackware-live.sh slackware-liv
  	if [ -d "$rootdirectory" ] && [ -b "$systempart" ]; then
  		systemsize=`du -s -m $rootdirectory | sed 's/\t.*//'`
  		device=`echo $systempart | cut -c6-8`
-@@ -741,11 +1817,14 @@
+@@ -741,11 +1819,14 @@
  			echo "error: insufficant space on device '$systempart'"
  			exit $INSUFFICIENTSPACE
  		else
@@ -1543,7 +1548,7 @@ diff -Naur slackware-live-0.5_orig/scripts/build-slackware-live.sh slackware-liv
  		exit $CMDERROR
  	fi
  	;;
-@@ -780,7 +1859,7 @@
+@@ -780,7 +1861,7 @@
  	echo "`basename $0` --module root_dir live_dir module_file [-xz|-gzip] [-optional]"
  	echo "`basename $0` --iso live_dir iso_file"
  	echo "`basename $0` --usb live_dir device"
@@ -1554,15 +1559,15 @@ diff -Naur slackware-live-0.5_orig/scripts/build-slackware-live.sh slackware-liv
  	exit $CMDERROR
 diff -Naur slackware-live-0.5_orig/scripts/init slackware-live-0.5/scripts/init
 --- slackware-live-0.5_orig/scripts/init	2014-02-07 11:04:23.000000000 +0200
-+++ slackware-live-0.5/scripts/init	2024-11-30 15:14:44.678702570 +0200
++++ slackware-live-0.5/scripts/init	2025-04-19 14:45:38.341925351 +0300
 @@ -1,4 +1,14 @@
  #!/bin/ash
 +# Eric Hameleers <alien@slackware.com> (encryption support)
 +
 +LIVELABEL="LIVE" #edit in build-slackware-live.sh script too
-+#DISTRONAME="Slackel-kde-7.7.0"
-+DISTRONAME="Slackel-openbox-7.7.0"
-+#DISTRONAME="Slackel-mate-7.7.0"
++#DISTRONAME="Slackel-kde-7.7.3"
++DISTRONAME="Slackel-openbox-7.7.3"
++#DISTRONAME="Slackel-mate-7.7.3"
 +
 +if [ ! -z "$medialabel" ]; then
 +	LIVELABEL=$medialabel
