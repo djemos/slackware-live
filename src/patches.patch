@@ -1,17 +1,17 @@
 diff -Naur slackware-live-0.5_orig/scripts/build-slackware-live.sh slackware-live-0.5/scripts/build-slackware-live.sh
 --- slackware-live-0.5_orig/scripts/build-slackware-live.sh	2014-02-11 22:32:24.000000000 +0200
-+++ slackware-live-0.5/scripts/build-slackware-live.sh	2025-04-19 14:42:46.485129944 +0300
++++ slackware-live-0.5/scripts/build-slackware-live.sh	2025-07-25 09:44:28.339463921 +0300
 @@ -1,4 +1,16 @@
  #!/bin/sh
 +#Dimitris Tzemos <dijemos@gmail.com> (changes for slackel,salix)
 +# Eric Hameleers <alien@slackware.com> (encryption support)
 +
 +LIVELABEL="LIVE" #edit in init script too
-+#SLACKEL_FLAVOR="Slackel-kde-7.7.3"
++#SLACKEL_FLAVOR="Slackel-kde-8.0"
 +#SLACKEL_FLAVOR_LILO="Slackel-kde"
-+SLACKEL_FLAVOR="Slackel-openbox-7.7.3"
++SLACKEL_FLAVOR="Slackel-openbox-8.0"
 +SLACKEL_FLAVOR_LILO="Slackel-openbox"
-+#SLACKEL_FLAVOR="Slackel-mate-7.7.3"
++#SLACKEL_FLAVOR="Slackel-mate-8.0"
 +#SLACKEL_FLAVOR_LILO="Slackel-mate"
 +
 +#LIVEFSOPTS="-O ^has_journal"
@@ -512,7 +512,7 @@ diff -Naur slackware-live-0.5_orig/scripts/build-slackware-live.sh slackware-liv
  
  	sed -i /^root:/d /mnt/install/etc/shadow #setup root password
  	cat /etc/shadow | sed -n /^root:/p >> /mnt/install/etc/shadow
-@@ -397,38 +623,107 @@
+@@ -397,38 +623,110 @@
  		cp -f /etc/rc.d/rc.keymap /mnt/install/etc/rc.d/
  	fi
  	cp -f /etc/profile.d/lang.sh /mnt/install/etc/profile.d/
@@ -543,12 +543,15 @@ diff -Naur slackware-live-0.5_orig/scripts/build-slackware-live.sh slackware-liv
  	#Copy end
 -
 +	#################
++	if [ -f /etc/os-release ]; then
++	 cp /etc/os-release /mnt/install/etc/os-release
++	fi 
 +	ROOTPART=$(lsblk -l -o name,mountpoint| grep /mnt/install$|sed "s,\([^[:space:]]*\).*,/dev/\1,")
 +	ROOTNAME=$(echo $ROOTPART|sed "s,/dev/,,")
 +	ROOTUUID=$(lsblk -l -o name,uuid|grep ^$ROOTNAME|sed "s/[^ ]*[[:space:]]*//")
 +	#FSTYPE=$(lsblk -l -o name,fstype|grep ^$ROOTNAME|sed "s/[^ ]*[[:space:]]*//")
 +	ROOTDEVICE=/dev/$(lsblk -l -o name,pkname|grep ^$ROOTNAME|sed "s/[^ ]*[[:space:]]*//")
-+	BRAND=$(grep ^NAME /mnt/etc/os-release|sed "s/.*=//")
++	BRAND=$(grep ^NAME /mnt/install/etc/os-release|sed "s/.*=//")
 +	#################
 +	echo "Setting up fstab"
  	#FSTab begin
@@ -631,7 +634,7 @@ diff -Naur slackware-live-0.5_orig/scripts/build-slackware-live.sh slackware-liv
  		if lsmod | grep -q $SYSINSTALLFS; then
  			moduleslist="$SYSINSTALLFS"
  		fi
-@@ -445,24 +740,47 @@
+@@ -445,24 +743,51 @@
  		done
  		moduleslist=`echo $moduleslist | sed 's/:$//'`
  		if [ ! -z "$moduleslist" ] && [ "$moduleslist" != "sg" ]; then
@@ -662,6 +665,10 @@ diff -Naur slackware-live-0.5_orig/scripts/build-slackware-live.sh slackware-liv
 -	
 +   if [ "$bootloader" == "lilo" ]; then
  	#LiLo begin
++	# Create initrd image for (e)lilo
++	sed -i "s/^GENINITRD_INITRD_GZ_SYMLINK=.*/GENINITRD_INITRD_GZ_SYMLINK=true/" /mnt/install/etc/default/geninitrd
++	echo "Create initrd image for (e)lilo"
++	chroot /mnt/install geninitrd
  	if [ "$loadersetup" == "-auto" ]; then
 -		installdevice=`echo $systempart | cut -c1-8`
 +		#installdevice=`echo $systempart | cut -c1-8`
@@ -685,7 +692,7 @@ diff -Naur slackware-live-0.5_orig/scripts/build-slackware-live.sh slackware-liv
  				if [ -d /mnt/efi/EFI/$efilabel ]; then
  					conflictpart=`cat /mnt/efi/EFI/$efilabel/elilo.conf | grep "append" | sed 's/.*root=\([^ ]*\).*/\1/'`
  					if [ "$conflictpart" == "$systempart" ]
-@@ -476,27 +794,69 @@
+@@ -476,27 +801,69 @@
  				cp /mnt/install/boot/vmlinuz /mnt/efi/EFI/$efilabel/
  				cat > /mnt/efi/EFI/$efilabel/elilo.conf << EOF
  timeout=1
@@ -694,9 +701,11 @@ diff -Naur slackware-live-0.5_orig/scripts/build-slackware-live.sh slackware-liv
  
  image=vmlinuz
 -    label=slackware
-+    label=$SLACKEL_FLAVOR
-     append="root=$systempart ro"
- 	read-only
+-    append="root=$systempart ro"
+-	read-only
++label=$SLACKEL_FLAVOR
++append="root=UUID=$ROOTUUID ro"
++read-only
  EOF
 +
 +				#####
@@ -710,7 +719,7 @@ diff -Naur slackware-live-0.5_orig/scripts/build-slackware-live.sh slackware-liv
 +				
  				if [ -f /mnt/install/boot/initrd.gz ]; then
 -					echo "  initrd=initrd.gz" >> /mnt/efi/EFI/$efilabel/elilo.conf
-+					echo "  initrd=/boot/initrd.gz" >> /mnt/efi/EFI/$efilabel/elilo.conf
++					echo "initrd=initrd.gz" >> /mnt/efi/EFI/$efilabel/elilo.conf
  					cp /mnt/install/boot/initrd.gz /mnt/efi/EFI/$efilabel/
  				fi
 +				
@@ -761,13 +770,11 @@ diff -Naur slackware-live-0.5_orig/scripts/build-slackware-live.sh slackware-liv
  bmp-colors = 255,0,255,0,255,0
  bmp-table = 60,6,1,16
  bmp-timer = 65,27,0,255
-@@ -513,12 +873,13 @@
- compact
+@@ -514,11 +881,12 @@
  
  image = /boot/vmlinuz
--root = $systempart
+ root = $systempart
 -label = Linux
-+root = UUID=$ROOTUUID "
 +label = $SLACKEL_FLAVOR_LILO
  read-only
  EOF
@@ -778,7 +785,7 @@ diff -Naur slackware-live-0.5_orig/scripts/build-slackware-live.sh slackware-liv
  			fi
  			windowspartition=`fdisk -l $installdevice 2>/dev/null | grep "^$installdevice.*\*.*\(NTFS\|FAT32\)" | cut -f1 -d' '`
  			if [ ! -z "$windowspartition" ]; then
-@@ -529,16 +890,712 @@
+@@ -529,16 +897,722 @@
  table = $installdevice
  EOF
  			fi
@@ -857,7 +864,17 @@ diff -Naur slackware-live-0.5_orig/scripts/build-slackware-live.sh slackware-liv
 +			fi
 +		#fi
 +		#for dir in sys proc dev; do mount --bind /$dir /mnt/install/$dir; done
++		echo "Remove /boot/initrd.gz - no need for grub"
++		if [ -f /mnt/install/boot/initrd.gz ]; then
++		  rm /mnt/install/boot/initrd.gz
++		fi 
++		# Create initrd image for grub
++		echo "Create initrd image for grub"
++		chroot /mnt/install geninitrd
 +		chroot /mnt/install grub-mkconfig -o /boot/grub/grub.cfg
++		if [ -f /mnt/install/boot/initrd.gz ]; then
++		  rm /mnt/install/boot/initrd.gz
++		fi  
 +		#for dir in sys proc dev; do umount /mnt/install/$dir; done
 +	fi
 +		#####
@@ -1494,7 +1511,7 @@ diff -Naur slackware-live-0.5_orig/scripts/build-slackware-live.sh slackware-liv
  	return 0
  }
  
-@@ -659,7 +1716,17 @@
+@@ -659,7 +1733,17 @@
  	moduleslist=$4
  	if [ -d "$rootdirectory" ] && [ ! -z "$livedirectory" ]; then
  		if [ -z "$moduleslist" ]; then
@@ -1513,7 +1530,7 @@ diff -Naur slackware-live-0.5_orig/scripts/build-slackware-live.sh slackware-liv
  		fi
  		init_live $rootdirectory $livedirectory $moduleslist
  	else
-@@ -730,6 +1797,17 @@
+@@ -730,6 +1814,17 @@
  	rootdirectory=$2
  	systempart=$3
  	loadersetup=$4
@@ -1531,7 +1548,7 @@ diff -Naur slackware-live-0.5_orig/scripts/build-slackware-live.sh slackware-liv
  	if [ -d "$rootdirectory" ] && [ -b "$systempart" ]; then
  		systemsize=`du -s -m $rootdirectory | sed 's/\t.*//'`
  		device=`echo $systempart | cut -c6-8`
-@@ -741,11 +1819,14 @@
+@@ -741,11 +1836,14 @@
  			echo "error: insufficant space on device '$systempart'"
  			exit $INSUFFICIENTSPACE
  		else
@@ -1548,7 +1565,7 @@ diff -Naur slackware-live-0.5_orig/scripts/build-slackware-live.sh slackware-liv
  		exit $CMDERROR
  	fi
  	;;
-@@ -780,7 +1861,7 @@
+@@ -780,7 +1878,7 @@
  	echo "`basename $0` --module root_dir live_dir module_file [-xz|-gzip] [-optional]"
  	echo "`basename $0` --iso live_dir iso_file"
  	echo "`basename $0` --usb live_dir device"
@@ -1559,15 +1576,15 @@ diff -Naur slackware-live-0.5_orig/scripts/build-slackware-live.sh slackware-liv
  	exit $CMDERROR
 diff -Naur slackware-live-0.5_orig/scripts/init slackware-live-0.5/scripts/init
 --- slackware-live-0.5_orig/scripts/init	2014-02-07 11:04:23.000000000 +0200
-+++ slackware-live-0.5/scripts/init	2025-04-19 14:45:38.341925351 +0300
++++ slackware-live-0.5/scripts/init	2025-07-21 12:54:47.000000000 +0300
 @@ -1,4 +1,14 @@
  #!/bin/ash
 +# Eric Hameleers <alien@slackware.com> (encryption support)
 +
 +LIVELABEL="LIVE" #edit in build-slackware-live.sh script too
-+#DISTRONAME="Slackel-kde-7.7.3"
-+DISTRONAME="Slackel-openbox-7.7.3"
-+#DISTRONAME="Slackel-mate-7.7.3"
++#DISTRONAME="Slackel-kde-8.0"
++DISTRONAME="Slackel-openbox-8.0"
++#DISTRONAME="Slackel-mate-8.0"
 +
 +if [ ! -z "$medialabel" ]; then
 +	LIVELABEL=$medialabel
@@ -1633,11 +1650,11 @@ diff -Naur slackware-live-0.5_orig/scripts/init slackware-live-0.5/scripts/init
 +## This file provides an easy way to add custom menu entries.  Simply type the
 +## menu entries you want to add after this comment.  Be careful not to change
 +## the 'exec tail' line above.
-+# menuentry 'Slackel OS 7.7.2 - Openbox (64 Bits)'	{
++# menuentry 'Slackel OS 8.0 - Openbox (64 Bits)'	{
 +#	#probe -u $root --set=rootuuid
 +#	#rootuuid=c7afb2c3-c68e-4040-b7a6-60e545834b75
 +#	search --set root -u $rootuuid
-+#	set isofile='ISO/slackellive64-openbox-7.7.2.iso'
++#	set isofile='ISO/slackellive64-openbox-8.0.iso'
 +#	loopback loop ($root)/$isofile
 +#	parameters="max_loop=255 vga=791 locale=el_GR.utf8 keymap=gr useswap=yes copy2ram=no tz=europe/Athens hwc=localtime runlevel=4"
 +#	linux (loop)/boot/vmlinuz fromiso=$isofile $parameters
